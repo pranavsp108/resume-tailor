@@ -1,7 +1,7 @@
 from google import genai
 
 # Use your key here
-client = genai.Client(api_key='AIzaSyCEsb7teqhRgjH50nzTEjafZh30UuQBnD4')
+client = genai.Client(api_key='')
 
 print(f"{'Model ID':<40} | {'Input Limit':<12} | {'Display Name'}")
 print("-" * 80)
