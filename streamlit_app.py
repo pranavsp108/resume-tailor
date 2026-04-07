@@ -3,6 +3,7 @@ import google.generativeai as genai
 
 # --- 1. CONFIG & SECRETS ---
 st.set_page_config(page_title="Resume Tailor Pro", layout="wide", page_icon="🎯")
+st.caption("v2.1 - header + education logic")
 
 # Pulls from Streamlit Cloud Secrets (Advanced Settings)
 # Fallback to sidebar input if secrets aren't set up yet
@@ -249,7 +250,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                     - If the job is in Washington state, change the resume header location to Seattle, WA.
                     - If the job is in Texas, change the resume header location to Dallas, TX.
                     - If the job is in Georgia, change the resume header location to Atlanta, GA.
-                    - If the job is in any other U.S. location, choose whichever is geographically closest among these four options only: Minneapolis, MN; Dublin, CA; Seattle, WA; Dallas, TX.
+                    - If the job is in any other U.S. location, choose whichever is geographically closest among these five options only: Minneapolis, MN; Dublin, CA; Seattle, WA; Dallas, TX; Atlanta,GA.
                     - Only update the resume header location line. Do not change employer locations inside experience unless explicitly required by the base resume.
                   9. EDUCATION TITLE ALIGNMENT RULE:
                     - For the University of Minnesota education entry, choose the most appropriate truthful wording based on the JD from only these options:
