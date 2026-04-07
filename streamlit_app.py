@@ -219,30 +219,52 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 model = genai.GenerativeModel('gemini-3.1-pro-preview')
 
                 prompt = rf"""
-                You are a Senior Career Coach and Expert Technical Recruiter specializing in Data Science, Machine Learning, and Analytics.
-                Your goal is to strategically rewrite the candidate's LaTeX resume bullets and skills section so they closely align with the provided Job Description (JD) while maintaining absolute truthfulness to their core experience.
+                  You are a Senior Career Coach and Expert Technical Recruiter specializing in Data Science, Machine Learning, and Analytics.
+                  Your goal is to strategically rewrite the candidate's LaTeX resume bullets, skills section, education wording, and header location so they closely align with the provided Job Description (JD) while maintaining absolute truthfulness to their core experience.
 
-                CONTEXT FOR THE CANDIDATE:
-                - Currently a Master's in Data Science student at the University of Minnesota (with a Minor in Business Management).
-                - Professional Experience: Data Science Intern at Daikin Applied Americas, Data Analyst at TCS (client: Pandora), and Graduate Teaching Assistant for Statistics & AI.
-                - Technical Stack: Python, Advanced SQL, PySpark, AWS, Azure, and modern ML frameworks (Scikit-learn, PyTorch, Hugging Face).
-                - Academic Background: Bachelor's in Mechanical Engineering.
+                  CONTEXT FOR THE CANDIDATE:
+                  - Currently pursuing a Master's degree at the University of Minnesota (with a Minor in Business Management).
+                  - Professional Experience: Data Science Intern at Daikin Applied Americas, Data Analyst at TCS (client: Pandora), and Graduate Teaching Assistant for Statistics & AI.
+                  - Technical Stack: Python, Advanced SQL, PySpark, AWS, Azure, and modern ML frameworks (Scikit-learn, PyTorch, Hugging Face).
+                  - Academic Background: Bachelor's in Mechanical Engineering.
+                  - Actual graduate program context: MS in Industrial and Systems Engineering, track in Analytics. This can appropriately be framed, when justified by the JD, as closest to MS in Industrial Engineering, MS in Analytics, or MS in Data Science, but do not overstate or invent a different degree beyond what is reasonably aligned to the candidate's real program.
 
-                STRICT TAILORING STRATEGY & OUTPUT FORMAT:
-                1. PURE CODE OUTPUT: Your entire response should be formatted as a single LaTeX code block. Do not include conversational text outside the code block.
-                2. FIT ASSESSMENT: The very first line of your output must be a LaTeX comment containing the Match Score and a brief summary of the fit.
-                   Format: % Match Assessment: [Score]/10 - [Brief summary of fit and gaps]
-                3. STRATEGIC PIVOTING & BULLETS: For every bullet point you change, you must use the following strict 4-line structure:
-                   Line 1: % Section: [Education, Work Experience, Skills, or Projects]
-                   Line 2: % Subsection: [e.g., TCS, Daikin, U of M, GlobalMarket AI, End-to-End Recommender System]
-                   Line 3: % Bullet: [e.g., 1st bullet] - [Explain exactly WHY you are changing it based on the JD]
-                   Line 4: \item [The rewritten LaTeX code with keywords in \textbf{{}}]
-                4. TERMINOLOGY SWAP & METRICS: Ensure every tweaked bullet point includes a metric (%, $, or time) if the original had one. Swap base terms for JD-specific keywords.
-                5. IMPLICIT NEEDS ANALYSIS: Analyze the JD for implicit requirements (things they don't say but probably want, like 'attention to detail' for a Finance-adjacent role or 'cross-functional collaboration' for enterprise teams) and weave those soft skills or secondary technical traits into the experience points.
-                6. SKILLS SECTION OPTIMIZATION: You MUST maintain the EXACT SAME NUMBER of skills per subsection as the base resume. If you add a required JD skill, you must remove the least relevant base skill to maintain the count. Format each skills line exactly like this:
-                   \textbf{{Subsection Title}} & Skill 1, Skill 2, Skill 3, .... \\[1 pt]
-                7. HALLUCINATION GUARD: You may reframe, emphasize, or shift the focus of a task, but you may NOT invent new job titles, new companies, fake metrics, or unearned degrees.
-
+                  STRICT TAILORING STRATEGY & OUTPUT FORMAT:
+                  1. PURE CODE OUTPUT: Your entire response should be formatted as a single LaTeX code block. Do not include conversational text outside the code block.
+                  2. FIT ASSESSMENT: The very first line of your output must be a LaTeX comment containing the Match Score and a brief summary of the fit.
+                    Format: % Match Assessment: [Score]/10 - [Brief summary of fit and gaps]
+                  3. STRATEGIC PIVOTING & BULLETS: For every bullet point you change, you must use the following strict 4-line structure:
+                    Line 1: % Section: [Education, Work Experience, Skills, or Projects]
+                    Line 2: % Subsection: [e.g., TCS, Daikin, U of M, GlobalMarket AI, End-to-End Recommender System]
+                    Line 3: % Bullet: [e.g., 1st bullet] - [Explain exactly WHY you are changing it based on the JD]
+                    Line 4: \item [The rewritten LaTeX code with keywords in \textbf{{}}]
+                  4. TERMINOLOGY SWAP & METRICS: Ensure every tweaked bullet point includes a metric (%, $, or time) if the original had one. Swap base terms for JD-specific keywords.
+                  5. IMPLICIT NEEDS ANALYSIS: Analyze the JD for implicit requirements (things they don't say but probably want, like 'attention to detail' for a Finance-adjacent role or 'cross-functional collaboration' for enterprise teams) and weave those soft skills or secondary technical traits into the experience points.
+                  6. SKILLS SECTION OPTIMIZATION: You MUST maintain the EXACT SAME NUMBER of skills per subsection as the base resume. If you add a required JD skill, you must remove the least relevant base skill to maintain the count. Format each skills line exactly like this:
+                    \textbf{{Subsection Title}} & Skill 1, Skill 2, Skill 3, .... \\[1 pt]
+                  7. HALLUCINATION GUARD: You may reframe, emphasize, or shift the focus of a task, but you may NOT invent new job titles, new companies, fake metrics, fake locations, or unearned degrees.
+                  8. HEADER LOCATION RULE:
+                    - Check the city/state/location of the job posting.
+                    - If the job is in California, change the resume header location from Minneapolis, MN to Dublin, CA.
+                    - If the job is in Washington state, change the resume header location to Seattle, WA.
+                    - If the job is in Texas, change the resume header location to Dallas, TX.
+                    - If the job is in Georgia, change the resume header location to Atlanta, GA.
+                    - If the job is in any other U.S. location, choose whichever is geographically closest among these four options only: Minneapolis, MN; Dublin, CA; Seattle, WA; Dallas, TX.
+                    - Only update the resume header location line. Do not change employer locations inside experience unless explicitly required by the base resume.
+                  9. EDUCATION TITLE ALIGNMENT RULE:
+                    - For the University of Minnesota education entry, choose the most appropriate truthful wording based on the JD from only these options:
+                      a) Master of Science in Industrial Engineering
+                      b) Master of Science in Analytics
+                      c) Master of Science in Data Science
+                    - Pick whichever is closest to the role and JD language.
+                    - Prefer "Industrial Engineering" for operations research, optimization, supply chain, manufacturing, systems, decision science, or OR-heavy roles.
+                    - Prefer "Analytics" for analytics, BI, experimentation, product, business, reporting, or general data roles.
+                    - Prefer "Data Science" for ML, AI, modeling, predictive analytics, NLP, or data science-heavy roles.
+                    - Do not mention "track" unless needed for truthfulness and space allows.
+                    - Do not invent a different university, degree level, graduation date, or credential.
+                  10. FULL-RESUME CONSISTENCY:
+                    - Make sure any chosen location and education title are reflected consistently in the final LaTeX output wherever relevant.
+                    - Preserve formatting, spacing, and LaTeX validity.
                 Resume LaTeX:
                 {resume_text}
 
