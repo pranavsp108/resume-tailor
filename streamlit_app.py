@@ -1,9 +1,15 @@
 import streamlit as st
 import google.generativeai as genai
+import json
+import re
+from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
+import pandas as pd
 
 # --- 1. CONFIG & SECRETS ---
 st.set_page_config(page_title="Resume Tailor Pro", layout="wide", page_icon="🎯")
-st.caption("v2.1 - header + education logic")
+st.caption("v3.0 - resume tailoring + job tracker")
 
 # Pulls from Streamlit Cloud Secrets (Advanced Settings)
 # Fallback to sidebar input if secrets aren't set up yet
@@ -192,6 +198,68 @@ base_resume = r"""
 \end{document}
 """
 
+# --- 1B. GOOGLE SHEETS HELPERS ---
+def get_gsheet():
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+    client = gspread.authorize(creds)
+
+    sheet = client.open("Job Application Tracker").sheet1
+    return sheet
+
+
+def initialize_sheet_headers(sheet):
+    existing = sheet.get_all_values()
+    if not existing:
+        sheet.append_row([
+            "Application Date",
+            "Role Title",
+            "Company",
+            "Location",
+            "Experience Level",
+            "Tools Needed",
+            "Match Score",
+            "Job Description"
+        ])
+
+
+def save_job_to_gsheet(job_data, jd_text, match_score=""):
+    sheet = get_gsheet()
+    initialize_sheet_headers(sheet)
+
+    sheet.append_row([
+        datetime.today().strftime("%Y-%m-%d"),
+        job_data.get("role_title", ""),
+        job_data.get("company", ""),
+        job_data.get("location", ""),
+        job_data.get("experience_years", ""),
+        ", ".join(job_data.get("tools", [])),
+        match_score,
+        jd_text
+    ])
+
+
+def fetch_saved_jobs():
+    sheet = get_gsheet()
+    records = sheet.get_all_records()
+    return pd.DataFrame(records)
+
+def extract_json_from_response(text):
+    text = text.strip()
+
+    # Remove markdown code fences if present
+    text = re.sub(r"^```json", "", text)
+    text = re.sub(r"^```", "", text)
+    text = re.sub(r"```$", "", text)
+    text = text.strip()
+
+    return json.loads(text)
+
 st.title("🎯 Strategic Resume Tailor")
 st.markdown("---")
 
@@ -206,6 +274,10 @@ with col2:
     st.subheader("Target Job Description")
     jd_text = st.text_area("Paste the JD here:", height=500, placeholder="Copy the full job posting text...")
 
+st.markdown("### 📌 Job Tracking")
+save_job_only = st.checkbox("Save this JD to Job Tracker after analysis", value=True)
+show_tracker = st.checkbox("Show saved job tracker table", value=False)
+
 # --- 3. THE LOGIC ---
 if st.button("🔥 Analyze & Tailor for this Role"):
     if not api_key:
@@ -216,9 +288,11 @@ if st.button("🔥 Analyze & Tailor for this Role"):
         with st.spinner("🧠 Senior Recruiter is analyzing the JD and pivoting your resume..."):
             try:
                 genai.configure(api_key=api_key)
-                # Using 3.1 Pro for high-level strategic reasoning
                 model = genai.GenerativeModel('gemini-3.1-pro-preview')
 
+                # -------------------------------
+                # 1. Resume tailoring prompt
+                # -------------------------------
                 prompt = rf"""
                   You are a Senior Career Coach and Expert Technical Recruiter specializing in Data Science, Machine Learning, and Analytics.
                   Your goal is to strategically rewrite the candidate's LaTeX resume bullets, skills section, education wording, and header location so they closely align with the provided Job Description (JD) while maintaining absolute truthfulness to their core experience.
@@ -240,7 +314,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                     Line 3: % Bullet: [e.g., 1st bullet] - [Explain exactly WHY you are changing it based on the JD]
                     Line 4: \item [The rewritten LaTeX code with keywords in \textbf{{}}]
                   4. TERMINOLOGY SWAP & METRICS: Ensure every tweaked bullet point includes a metric (%, $, or time) if the original had one. Swap base terms for JD-specific keywords.
-                  5. IMPLICIT NEEDS ANALYSIS: Analyze the JD for implicit requirements (things they don't say but probably want, like 'attention to detail' for a Finance-adjacent role or 'cross-functional collaboration' for enterprise teams) and weave those soft skills or secondary technical traits into the experience points.
+                  5. IMPLICIT NEEDS ANALYSIS: Analyze the JD for implicit requirements and weave those soft skills or secondary technical traits into the experience points.
                   6. SKILLS SECTION OPTIMIZATION: You MUST maintain the EXACT SAME NUMBER of skills per subsection as the base resume. If you add a required JD skill, you must remove the least relevant base skill to maintain the count. Format each skills line exactly like this:
                     \textbf{{Subsection Title}} & Skill 1, Skill 2, Skill 3, .... \\[1 pt]
                   7. HALLUCINATION GUARD: You may reframe, emphasize, or shift the focus of a task, but you may NOT invent new job titles, new companies, fake metrics, fake locations, or unearned degrees.
@@ -250,7 +324,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                     - If the job is in Washington state, change the resume header location to Seattle, WA.
                     - If the job is in Texas, change the resume header location to Dallas, TX.
                     - If the job is in Georgia, change the resume header location to Atlanta, GA.
-                    - If the job is in any other U.S. location, choose whichever is geographically closest among these five options only: Minneapolis, MN; Dublin, CA; Seattle, WA; Dallas, TX; Atlanta,GA.
+                    - If the job is in any other U.S. location, choose whichever is geographically closest among these five options only: Minneapolis, MN; Dublin, CA; Seattle, WA; Dallas, TX; Atlanta, GA.
                     - Only update the resume header location line. Do not change employer locations inside experience unless explicitly required by the base resume.
                   9. EDUCATION TITLE ALIGNMENT RULE:
                     - For the University of Minnesota education entry, choose the most appropriate truthful wording based on the JD from only these options:
@@ -266,6 +340,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                   10. FULL-RESUME CONSISTENCY:
                     - Make sure any chosen location and education title are reflected consistently in the final LaTeX output wherever relevant.
                     - Preserve formatting, spacing, and LaTeX validity.
+
                 Resume LaTeX:
                 {resume_text}
 
@@ -274,11 +349,83 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 """
 
                 response = model.generate_content(prompt)
-                
+                tailored_text = response.text
+
                 st.subheader("🚀 Your Tailored LaTeX Updates")
-                st.code(response.text, language='latex')
+                st.code(tailored_text, language='latex')
                 st.success("Analysis Complete! Copy the snippets above into Overleaf.")
                 st.info("💡 The match score is in the top line of the code block above.")
 
+                # -------------------------------
+                # 2. Extract job info as JSON
+                # -------------------------------
+                extraction_prompt = f"""
+                Extract structured information from this job description.
+
+                Return ONLY valid JSON in this exact format:
+                {{
+                  "role_title": "",
+                  "company": "",
+                  "location": "",
+                  "experience_years": "",
+                  "tools": []
+                }}
+
+                Rules:
+                - role_title = exact or closest job title
+                - company = employer name if available
+                - location = city/state or remote/hybrid if available
+                - experience_years = use values like "0-2 years", "2+ years", "3-5 years"
+                - tools = list the most important tools/technologies/skills, max 10
+                - normalize tools like Python, SQL, AWS, Tableau, Airflow, Scikit-learn, etc.
+                - return JSON only, with no explanation
+
+                Job Description:
+                {jd_text}
+                """
+
+                extraction_response = model.generate_content(extraction_prompt)
+                def extract_json_from_response(text):
+                  text = text.strip()
+
+                  # Try fenced JSON first
+                  match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+                  if match:
+                      text = match.group(1)
+                  else:
+                      # Fallback: first JSON object found
+                      match = re.search(r"(\{.*\})", text, re.DOTALL)
+                      if match:
+                          text = match.group(1)
+
+                  return json.loads(text)
+
+                st.subheader("📋 Extracted Job Info")
+                st.json(job_data)
+
+                # -------------------------------
+                # 3. Match score parsing
+                # -------------------------------
+                match_score = ""
+                score_match = re.search(r"Match Assessment:\s*([0-9.]+/10)", tailored_text)
+                if score_match:
+                    match_score = score_match.group(1)
+
+                # -------------------------------
+                # 4. Save to Google Sheets
+                # -------------------------------
+                if save_job_only:
+                    save_job_to_gsheet(job_data, jd_text, match_score)
+                    st.success("✅ Job application saved to Google Sheets.")
+
             except Exception as e:
                 st.error(f"Error: {e}")
+
+
+if show_tracker:
+    try:
+        tracker_df = fetch_saved_jobs()
+        st.subheader("📊 Saved Job Applications")
+        st.dataframe(tracker_df, use_container_width=True)
+    except Exception as e:
+        st.error(f"Could not load tracker data: {e}")
