@@ -95,7 +95,7 @@ base_resume = r"""
   \small
     Minneapolis, MN \ $|$ \ (763)-900-3044 \ $|$ \ 
     \href{mailto:padma062@umn.edu}{padma062@umn.edu} \ $|$ \ 
-    \href{https://www.linkedin.com/in/pranavpadmannavar/}{LinkedIn} \ $|$ \ 
+    \href{https://www.linkedin.com/in/pranavsp108/}{LinkedIn} \ $|$ \ 
     \href{https://github.com/pranavsp108}{github} \ $|$ \ 
     \href{https://pranavsp108.github.io/}{Portfolio}
 \end{center}
