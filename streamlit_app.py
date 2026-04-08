@@ -252,13 +252,22 @@ def fetch_saved_jobs():
 def extract_json_from_response(text):
     text = text.strip()
 
-    # Remove markdown code fences if present
-    text = re.sub(r"^```json", "", text)
-    text = re.sub(r"^```", "", text)
-    text = re.sub(r"```$", "", text)
-    text = text.strip()
+    # Try JSON fenced block first
+    match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
 
-    return json.loads(text)
+    # Try any fenced block
+    match = re.search(r"```\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+
+    # Try raw JSON object
+    match = re.search(r"(\{.*\})", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+
+    raise ValueError("No valid JSON object found in model response.")
 
 st.title("🎯 Strategic Resume Tailor")
 st.markdown("---")
@@ -359,6 +368,8 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 # -------------------------------
                 # 2. Extract job info as JSON
                 # -------------------------------
+                job_data = None
+
                 extraction_prompt = f"""
                 Extract structured information from this job description.
 
@@ -384,24 +395,18 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 {jd_text}
                 """
 
-                extraction_response = model.generate_content(extraction_prompt)
-                def extract_json_from_response(text):
-                  text = text.strip()
+                try:
+                    extraction_response = model.generate_content(extraction_prompt)
+                    st.subheader("🧪 Raw Extraction Response")
+                    st.code(extraction_response.text, language="json")  # temporary debug
+                    job_data = extract_json_from_response(extraction_response.text)
 
-                  # Try fenced JSON first
-                  match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-                  if match:
-                      text = match.group(1)
-                  else:
-                      # Fallback: first JSON object found
-                      match = re.search(r"(\{.*\})", text, re.DOTALL)
-                      if match:
-                          text = match.group(1)
+                    st.subheader("📋 Extracted Job Info")
+                    st.json(job_data)
 
-                  return json.loads(text)
+                except Exception as extraction_error:
+                    st.error(f"Extraction failed: {extraction_error}")
 
-                st.subheader("📋 Extracted Job Info")
-                st.json(job_data)
 
                 # -------------------------------
                 # 3. Match score parsing
@@ -414,9 +419,11 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 # -------------------------------
                 # 4. Save to Google Sheets
                 # -------------------------------
-                if save_job_only:
+                if save_job_only and job_data is not None:
                     save_job_to_gsheet(job_data, jd_text, match_score)
                     st.success("✅ Job application saved to Google Sheets.")
+                elif save_job_only:
+                    st.warning("Job was not saved because extraction failed.")
 
             except Exception as e:
                 st.error(f"Error: {e}")
