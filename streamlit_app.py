@@ -94,7 +94,7 @@ base_resume = r"""
   {\large\textbf{Pranav Padmannavar}} \\[2pt]
   \small
     Minneapolis, MN \ $|$ \ (763)-900-3044 \ $|$ \ 
-    \href{mailto:padma062@umn.edu}{padma062@umn.edu} \ $|$ \ 
+    \href{mailto:pranavsp108@gmail.com}{pranavsp108@gmail.com} \ $|$ \ 
     \href{https://www.linkedin.com/in/pranavsp108/}{LinkedIn} \ $|$ \ 
     \href{https://github.com/pranavsp108}{github} \ $|$ \ 
     \href{https://pranavsp108.github.io/}{Portfolio}
@@ -209,8 +209,10 @@ def get_gsheet():
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
 
-    sheet = client.open("Job Application Tracker").sheet1
-    return sheet
+    # Better: use spreadsheet ID instead of title
+    spreadsheet = client.open_by_key(st.secrets["GOOGLE_SHEET_ID"])
+    worksheet = spreadsheet.sheet1
+    return worksheet
 
 
 def initialize_sheet_headers(sheet):
@@ -229,19 +231,26 @@ def initialize_sheet_headers(sheet):
 
 
 def save_job_to_gsheet(job_data, jd_text, match_score=""):
-    sheet = get_gsheet()
-    initialize_sheet_headers(sheet)
+    try:
+        sheet = get_gsheet()
+        initialize_sheet_headers(sheet)
 
-    sheet.append_row([
-        datetime.today().strftime("%Y-%m-%d"),
-        job_data.get("role_title", ""),
-        job_data.get("company", ""),
-        job_data.get("location", ""),
-        job_data.get("experience_years", ""),
-        ", ".join(job_data.get("tools", [])),
-        match_score,
-        jd_text
-    ])
+        row = [
+            datetime.today().strftime("%Y-%m-%d"),
+            str(job_data.get("role_title", "")),
+            str(job_data.get("company", "")),
+            str(job_data.get("location", "")),
+            str(job_data.get("experience_years", "")),
+            ", ".join([str(x) for x in job_data.get("tools", [])]),
+            str(match_score),
+            str(jd_text)
+        ]
+
+        response = sheet.append_row(row, value_input_option="USER_ENTERED")
+        return response
+
+    except Exception as e:
+        raise RuntimeError(f"Google Sheets save failed: {type(e).__name__}: {e}")
 
 
 def fetch_saved_jobs():
@@ -420,8 +429,11 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 # 4. Save to Google Sheets
                 # -------------------------------
                 if save_job_only and job_data is not None:
-                    save_job_to_gsheet(job_data, jd_text, match_score)
-                    st.success("✅ Job application saved to Google Sheets.")
+                    try:
+                        save_response = save_job_to_gsheet(job_data, jd_text, match_score)
+                        st.success("✅ Job application saved to Google Sheets.")
+                    except Exception as save_error:
+                        st.error(f"Save step failed: {save_error}")
                 elif save_job_only:
                     st.warning("Job was not saved because extraction failed.")
 
