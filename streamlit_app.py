@@ -15,6 +15,7 @@ st.caption("v3.0 - resume tailoring + job tracker")
 # Pulls from Streamlit Cloud Secrets (Advanced Settings)
 # Fallback to sidebar input if secrets aren't set up yet
 api_key = st.secrets.get("GEMINI_API_KEY") or st.sidebar.text_input("Enter Gemini API Key:", type="password")
+openai_key = st.secrets.get("OPENAI_API_KEY") or st.sidebar.text_input("Enter OpenAI API Key:", type="password")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🚀 Strategy Level")
@@ -328,6 +329,12 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                   - Technical Stack: Python, Advanced SQL, PySpark, AWS, Azure, and modern ML frameworks (Scikit-learn, PyTorch, Hugging Face).
                   - Academic Background: Bachelor's in Mechanical Engineering.
                   - Actual graduate program context: MS in Industrial and Systems Engineering, track in Analytics. This can appropriately be framed, when justified by the JD, as closest to MS in Industrial Engineering, MS in Analytics, or MS in Data Science, but do not overstate or invent a different degree beyond what is reasonably aligned to the candidate's real program.
+                  
+                  STRICT FORMATTING RULE: 
+                  - DO NOT add any markdown formatting (like ** or *) inside the code block.
+                  - DO NOT add spaces between a backslash and the command (e.g., use \begin, NOT \ begin).
+                  - DO NOT add spaces inside curly braces (e.g., use {center}, NOT { center }).
+                  - Ensure all LaTeX special characters like $ and & are handled exactly as they appear in the base resume.
 
                   STRICT TAILORING STRATEGY & OUTPUT FORMAT:
                   1. PURE CODE OUTPUT: Your entire response should be formatted as a single LaTeX code block. Do not include conversational text outside the code block.
@@ -377,13 +384,14 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 # 2. Send the prompt to the selected model
                 # ---------------------------------------------------------
                 if strategy_mode == "Daily Driver (GPT-4o-mini)":
-                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    client = openai.OpenAI(api_key=openai_key)
                     response = client.chat.completions.create(
                         model="gpt-4o-mini",
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0
                     )
                     tailored_text = response.choices[0].message.content
+                    tailored_text = tailored_text.replace("```latex", "").replace("```", "").strip()
                 else:
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel('gemini-3.1-pro-preview')
@@ -431,7 +439,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 # ---------------------------------------------------------
                 try:
                     # Initialize OpenAI client for extraction
-                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    client = openai.OpenAI(api_key=openai_key)
                     
                     extraction_response = client.chat.completions.create(
                         model="gpt-4o-mini",
