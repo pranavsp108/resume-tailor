@@ -333,7 +333,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                   STRICT FORMATTING RULE: 
                   - DO NOT add any markdown formatting (like ** or *) inside the code block.
                   - DO NOT add spaces between a backslash and the command (e.g., use \begin, NOT \ begin).
-                  - DO NOT add spaces inside curly braces (e.g., use {center}, NOT { center }).
+                  - DO NOT add spaces inside curly braces (e.g., use {{center}}, NOT {{ center }}).
                   - Ensure all LaTeX special characters like $ and & are handled exactly as they appear in the base resume.
 
                   STRICT TAILORING STRATEGY & OUTPUT FORMAT:
