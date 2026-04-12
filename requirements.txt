@@ -1,6 +1,6 @@
 streamlit
 google-generativeai
+openai>=1.0.0
 gspread
 google-auth
 pandas
-openai
