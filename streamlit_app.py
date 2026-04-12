@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import openai
 import json
 import re
 from datetime import datetime
@@ -14,6 +15,15 @@ st.caption("v3.0 - resume tailoring + job tracker")
 # Pulls from Streamlit Cloud Secrets (Advanced Settings)
 # Fallback to sidebar input if secrets aren't set up yet
 api_key = st.secrets.get("GEMINI_API_KEY") or st.sidebar.text_input("Enter Gemini API Key:", type="password")
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🚀 Strategy Level")
+strategy_mode = st.sidebar.radio(
+    "Select Priority:",
+    ["Daily Driver (GPT-4o-mini)", "Dream Job (Gemini 3.1 Pro)"],
+    index=0,  # This forces GPT-4o-mini as the default
+    help="Default is GPT-4o-mini. Switch to Gemini 3.1 Pro only for high-stakes 'Dream' roles."
+)
 
 # Pulls your base LaTeX from secrets to keep this file light
 # Fallback to a placeholder if not found
@@ -305,12 +315,9 @@ if st.button("🔥 Analyze & Tailor for this Role"):
     else:
         with st.spinner("🧠 Senior Recruiter is analyzing the JD and pivoting your resume..."):
             try:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-3.1-pro-preview')
-
-                # -------------------------------
-                # 1. Resume tailoring prompt
-                # -------------------------------
+                # ---------------------------------------------------------
+                # 1. Define the Prompt (We do this first so both models can use it)
+                # ---------------------------------------------------------
                 prompt = rf"""
                   You are a Senior Career Coach and Expert Technical Recruiter specializing in Data Science, Machine Learning, and Analytics.
                   Your goal is to strategically rewrite the candidate's LaTeX resume bullets, skills section, education wording, and header location so they closely align with the provided Job Description (JD) while maintaining absolute truthfulness to their core experience.
@@ -342,7 +349,8 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                     - If the job is in Washington state, change the resume header location to Seattle, WA.
                     - If the job is in Texas, change the resume header location to Dallas, TX.
                     - If the job is in Georgia, change the resume header location to Atlanta, GA.
-                    - If the job is in any other U.S. location, choose whichever is geographically closest among these five options only: Minneapolis, MN; Dublin, CA; Seattle, WA; Dallas, TX; Atlanta, GA.
+                    - If the job is in North Carolina, change the resume header location to High Point, NC
+                    - If the job is in any other U.S. location, choose : Minneapolis, MN.
                     - Only update the resume header location line. Do not change employer locations inside experience unless explicitly required by the base resume.
                   9. EDUCATION TITLE ALIGNMENT RULE:
                     - For the University of Minnesota education entry, choose the most appropriate truthful wording based on the JD from only these options:
@@ -365,10 +373,24 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 Job Description:
                 {jd_text}
                 """
+                # ---------------------------------------------------------
+                # 2. Send the prompt to the selected model
+                # ---------------------------------------------------------
+                if strategy_mode == "Daily Driver (GPT-4o-mini)":
+                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0
+                    )
+                    tailored_text = response.choices[0].message.content
+                else:
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-3.1-pro-preview')
+                    response = model.generate_content(prompt)
+                    tailored_text = response.text
 
-                response = model.generate_content(prompt)
-                tailored_text = response.text
-
+                # Now display the result
                 st.subheader("🚀 Your Tailored LaTeX Updates")
                 st.code(tailored_text, language='latex')
                 st.success("Analysis Complete! Copy the snippets above into Overleaf.")
@@ -404,20 +426,33 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                 {jd_text}
                 """
 
+                # ---------------------------------------------------------
+                # 2. Extract info for Tracker (Always use GPT-4o-mini to save $)
+                # ---------------------------------------------------------
                 try:
-                    extraction_response = model.generate_content(extraction_prompt)
-                    st.subheader("🧪 Raw Extraction Response")
-                    st.code(extraction_response.text, language="json")  # temporary debug
-                    job_data = extract_json_from_response(extraction_response.text)
+                    # Initialize OpenAI client for extraction
+                    client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+                    
+                    extraction_response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "user", "content": extraction_prompt}],
+                        temperature=0
+                    )
+                    
+                    raw_extraction = extraction_response.choices[0].message.content
+                    
+                    # Optional: st.subheader("🧪 Raw Extraction Response")
+                    # Optional: st.code(raw_extraction, language="json")
+                    
+                    job_data = extract_json_from_response(raw_extraction)
 
                     st.subheader("📋 Extracted Job Info")
                     st.json(job_data)
 
                 except Exception as extraction_error:
                     st.error(f"Extraction failed: {extraction_error}")
-
-
-                # -------------------------------
+                    
+                                    # -------------------------------
                 # 3. Match score parsing
                 # -------------------------------
                 match_score = ""
