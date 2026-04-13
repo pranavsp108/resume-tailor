@@ -9,11 +9,9 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 
 # --- 1. CONFIG & SECRETS ---
-st.set_page_config(page_title="Resume Tailor Pro", layout="wide", page_icon="🎯")
-st.caption("v3.0 - resume tailoring + job tracker")
+st.set_page_config(page_title="Pranav's Resume Tailor", layout="wide", page_icon="🎯")
+st.caption("v4.0 - efficient multi-step tailoring + job tracker")
 
-# Pulls from Streamlit Cloud Secrets (Advanced Settings)
-# Fallback to sidebar input if secrets aren't set up yet
 api_key = st.secrets.get("GEMINI_API_KEY") or st.sidebar.text_input("Enter Gemini API Key:", type="password")
 openai_key = st.secrets.get("OPENAI_API_KEY") or st.sidebar.text_input("Enter OpenAI API Key:", type="password")
 
@@ -22,13 +20,19 @@ st.sidebar.subheader("🚀 Strategy Level")
 strategy_mode = st.sidebar.radio(
     "Select Priority:",
     ["Daily Driver (GPT-4o-mini)", "Dream Job (Gemini 3.1 Pro)"],
-    index=0,  # This forces GPT-4o-mini as the default
-    help="Default is GPT-4o-mini. Switch to Gemini 3.1 Pro only for high-stakes 'Dream' roles."
+    index=0,
+    help="Use GPT-4o-mini for cost-efficient daily tailoring. Use Gemini only for high-stakes roles."
+)
+
+# Optional premium pass, off by default to save cost
+st.sidebar.markdown("---")
+enable_critique = st.sidebar.checkbox(
+    "Add premium critique pass",
+    value=False,
+    help="Runs one extra cheap scoring pass after tailoring. Leave off to minimize cost."
 )
 
 # Pulls your base LaTeX from secrets to keep this file light
-# Fallback to a placeholder if not found
-# Line 13
 base_resume = r"""
 %% Pranav Padmannavar — Resume LaTeX Source
 %% Font: Computer Modern (LaTeX default), sizes scaled down slightly
@@ -219,8 +223,6 @@ def get_gsheet():
     creds_dict = dict(st.secrets["gcp_service_account"])
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
-
-    # Better: use spreadsheet ID instead of title
     spreadsheet = client.open_by_key(st.secrets["GOOGLE_SHEET_ID"])
     worksheet = spreadsheet.sheet1
     return worksheet
@@ -237,6 +239,8 @@ def initialize_sheet_headers(sheet):
             "Experience Level",
             "Tools Needed",
             "Match Score",
+            "Role Domain",
+            "Top Keywords",
             "Job Description"
         ])
 
@@ -254,12 +258,12 @@ def save_job_to_gsheet(job_data, jd_text, match_score=""):
             str(job_data.get("experience_years", "")),
             ", ".join([str(x) for x in job_data.get("tools", [])]),
             str(match_score),
+            str(job_data.get("role_domain", "")),
+            ", ".join([str(x) for x in job_data.get("top_keywords", [])]),
             str(jd_text)
         ]
 
-        response = sheet.append_row(row, value_input_option="USER_ENTERED")
-        return response
-
+        return sheet.append_row(row, value_input_option="USER_ENTERED")
     except Exception as e:
         raise RuntimeError(f"Google Sheets save failed: {type(e).__name__}: {e}")
 
@@ -269,30 +273,301 @@ def fetch_saved_jobs():
     records = sheet.get_all_records()
     return pd.DataFrame(records)
 
-def extract_json_from_response(text):
+
+# --- 2. LIGHTWEIGHT HELPERS ---
+def clean_code_fence(text: str) -> str:
+    return text.replace("```latex", "").replace("```json", "").replace("```", "").strip()
+
+
+def extract_json_from_response(text: str):
     text = text.strip()
 
-    # Try JSON fenced block first
     match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:
         return json.loads(match.group(1))
 
-    # Try any fenced block
     match = re.search(r"```\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:
         return json.loads(match.group(1))
 
-    # Try raw JSON object
     match = re.search(r"(\{.*\})", text, re.DOTALL)
     if match:
         return json.loads(match.group(1))
 
     raise ValueError("No valid JSON object found in model response.")
 
+
+def infer_header_location(job_location: str) -> str:
+    location = (job_location or "").lower()
+    mapping = {
+        "california": "Dublin, CA",
+        "ca": "Dublin, CA",
+        "washington": "Seattle, WA",
+        "wa": "Seattle, WA",
+        "texas": "Dallas, TX",
+        "tx": "Dallas, TX",
+        "georgia": "Atlanta, GA",
+        "ga": "Atlanta, GA",
+        "north carolina": "High Point, NC",
+        "nc": "High Point, NC",
+    }
+    for key, value in mapping.items():
+        if key in location:
+            return value
+    return "Minneapolis, MN"
+
+
+def infer_degree_title(role_domain: str, jd_text: str) -> str:
+    domain = (role_domain or "").lower()
+    jd_lower = (jd_text or "").lower()
+
+    if any(term in domain for term in ["operations research", "optimization", "industrial", "supply chain"]):
+        return "Master of Science in Industrial Engineering"
+    if any(term in domain for term in ["marketing analytics", "product analytics", "business intelligence", "analytics", "data analyst"]):
+        return "Master of Science in Analytics"
+    if any(term in domain for term in ["machine learning", "data science", "ai", "nlp"]):
+        return "Master of Science in Data Science"
+
+    if any(term in jd_lower for term in ["machine learning", "artificial intelligence", "predictive", "nlp"]):
+        return "Master of Science in Data Science"
+    if any(term in jd_lower for term in ["operations research", "optimization", "industrial engineering", "supply chain"]):
+        return "Master of Science in Industrial Engineering"
+    return "Master of Science in Analytics"
+
+
+def get_openai_client():
+    if not openai_key:
+        raise ValueError("Missing OpenAI API key.")
+    return openai.OpenAI(api_key=openai_key)
+
+
+def get_jd_intelligence(jd_text: str) -> dict:
+    """
+    One cheap structured pass reused for:
+    - role/domain understanding
+    - prompt grounding
+    - job tracker extraction
+    This replaces the old separate tracker extraction call.
+    """
+    extraction_prompt = f"""
+You are an expert recruiter.
+Analyze the job description and return ONLY valid JSON.
+
+Required schema:
+{{
+  "role_title": "",
+  "company": "",
+  "location": "",
+  "experience_years": "",
+  "tools": [],
+  "role_domain": "",
+  "top_keywords": [],
+  "top_responsibilities": [],
+  "top_business_skills": []
+}}
+
+Rules:
+- role_title: exact or closest title.
+- company: employer name if available.
+- location: city/state/remote/hybrid if available.
+- experience_years: concise string like "0-2 years", "2+ years", "3-5 years".
+- tools: max 10 normalized tools/technologies.
+- role_domain: choose the single best fit such as Marketing Analytics, Product Analytics, Business Intelligence, Data Science, Machine Learning, Data Engineering, Operations Research, General Analytics.
+- top_keywords: max 10 ATS keywords actually important for fit.
+- top_responsibilities: max 5 action-oriented responsibilities.
+- top_business_skills: max 4 business or soft skills.
+- Return JSON only.
+
+Job Description:
+{jd_text}
+"""
+    client = get_openai_client()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": "You extract structured job information accurately and concisely."},
+            {"role": "user", "content": extraction_prompt},
+        ],
+    )
+    return json.loads(response.choices[0].message.content)
+
+
+def build_daily_driver_prompt(resume_text: str, jd_text: str, jd_info: dict, header_location: str, degree_title: str) -> str:
+    return rf"""
+You are a precise resume tailoring assistant for analytics and data roles.
+
+Your task is to tailor the LaTeX resume for the job description using the structured JD summary below.
+Be efficient, truthful, and selective. Improve only lines that materially increase fit.
+
+CANDIDATE FACTS YOU MUST RESPECT:
+- University of Minnesota graduate program is truthfully closest to one of: Master of Science in Industrial Engineering, Master of Science in Analytics, or Master of Science in Data Science.
+- Do not invent titles, companies, metrics, locations, tools, projects, or degrees.
+- Preserve existing metrics if they already exist.
+- Keep the overall one-page LaTeX structure intact.
+
+DETERMINISTIC SETTINGS ALREADY CHOSEN:
+- Header location to use: {header_location}
+- Education title to use: {degree_title}
+
+STRUCTURED JD SUMMARY:
+- Role title: {jd_info.get('role_title', '')}
+- Company: {jd_info.get('company', '')}
+- Location: {jd_info.get('location', '')}
+- Role domain: {jd_info.get('role_domain', '')}
+- Top keywords: {', '.join(jd_info.get('top_keywords', []))}
+- Top responsibilities: {' | '.join(jd_info.get('top_responsibilities', []))}
+- Top business skills: {', '.join(jd_info.get('top_business_skills', []))}
+- Important tools: {', '.join(jd_info.get('tools', []))}
+
+DOMAIN GUIDANCE:
+- If the role domain is Marketing Analytics, emphasize customer behavior, segmentation, campaign or channel insights, business intelligence, dashboards, and stakeholder decision support.
+- If the role domain is Business Intelligence or General Analytics, emphasize SQL, dashboards, KPIs, reporting, business partnership, and decision support.
+- If the role domain is Data Science or Machine Learning, emphasize modeling, experimentation, prediction, and technical depth.
+- If the role domain is Data Engineering, emphasize pipelines, warehousing, reliability, and scale.
+
+BULLET REWRITE RULE:
+Every rewritten bullet should follow this pattern as closely as the original facts allow:
+[Action] + [Tool or method] + [business problem or analysis] + [quantified impact] + [JD-aligned outcome]
+
+IMPORTANT STYLE RULES:
+- Prefer natural recruiter language over copying long JD phrases.
+- Use JD terminology selectively, not mechanically.
+- Prioritize the TCS / Pandora bullets first for business-facing analyst roles.
+- Reduce unnecessary MLOps emphasis if the role is analyst or BI oriented.
+- Maintain the exact same number of skills in each skills subsection.
+- If you add a JD-relevant skill, remove a less relevant one from the same subsection.
+
+LATEX RULES:
+- Return only the final LaTeX inside a single code block.
+- First line must be a LaTeX comment in this format:
+  % Match Assessment: [score]/10 - [brief summary]
+- Do not add prose outside the code block.
+- Keep LaTeX valid. Do not add markdown formatting inside the code.
+- Preserve special characters carefully.
+
+BASE RESUME:
+{resume_text}
+
+JOB DESCRIPTION:
+{jd_text}
+"""
+
+
+def build_dream_job_prompt(resume_text: str, jd_text: str, jd_info: dict, header_location: str, degree_title: str) -> str:
+    return rf"""
+You are a Senior Career Coach and Expert Technical Recruiter specializing in Data Science, Machine Learning, Analytics, Product Analytics, and Business Intelligence roles.
+Your job is to strategically tailor the candidate's LaTeX resume so it aligns closely with the job description while staying fully truthful to the candidate's real experience.
+
+CANDIDATE CONTEXT:
+- University of Minnesota graduate program should be represented truthfully using this chosen title: {degree_title}
+- Professional experience includes Daikin Applied Americas, Tata Consultancy Services (client: Pandora), and University of Minnesota teaching work.
+- Technical stack includes Python, SQL, R, PySpark, AWS, Azure, analytics, dashboards, and modern ML frameworks.
+- Header location has already been chosen and must be used exactly as: {header_location}
+
+STRUCTURED JD INTELLIGENCE:
+{json.dumps(jd_info, indent=2)}
+
+TAILORING GOALS:
+1. Improve ATS keyword coverage.
+2. Improve responsibility alignment.
+3. Improve domain alignment for the role domain: {jd_info.get('role_domain', '')}.
+4. Keep the output natural and recruiter-believable.
+5. Avoid obvious copy-paste phrasing from the JD.
+
+REWRITE STRATEGY:
+- Rewrite only where useful; keep strong original bullets when they already fit.
+- Prioritize the most relevant bullets and skills first.
+- Keep metrics whenever they already exist.
+- Use this bullet formula where possible:
+  [Action] + [Tool/Method] + [Business Problem] + [Quantified Impact] + [JD-aligned outcome]
+- If the role is analyst, BI, or marketing-facing, emphasize dashboards, stakeholder partnership, data quality, business insights, and decision support.
+- If the role is DS/ML-heavy, emphasize modeling, experimentation, statistical rigor, and predictive impact.
+- Keep the exact same number of skills within each skill subsection.
+
+OUTPUT RULES:
+- Return the full final LaTeX resume inside a single ```latex code block.
+- The first line must be:
+  % Match Assessment: [score]/10 - [brief fit summary]
+- Do not include commentary outside the code block.
+- Keep LaTeX valid.
+- Do not invent facts.
+
+BASE RESUME:
+{resume_text}
+
+JOB DESCRIPTION:
+{jd_text}
+"""
+
+
+def run_tailoring_model(prompt: str, strategy_mode: str) -> str:
+    if strategy_mode == "Daily Driver (GPT-4o-mini)":
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            messages=[
+                {"role": "system", "content": "You tailor resumes carefully, truthfully, and efficiently."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return clean_code_fence(response.choices[0].message.content)
+
+    if not api_key:
+        raise ValueError("Missing Gemini API key.")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-3.1-pro-preview')
+    response = model.generate_content(prompt)
+    return clean_code_fence(response.text)
+
+
+def run_optional_critique(tailored_text: str, jd_info: dict, jd_text: str) -> dict:
+    critique_prompt = f"""
+You are a recruiter evaluating a tailored resume.
+Return ONLY valid JSON in this schema:
+{{
+  "keyword_match": 0,
+  "business_alignment": 0,
+  "domain_relevance": 0,
+  "overall_score": 0,
+  "top_gaps": [],
+  "top_improvements": []
+}}
+
+Scoring rules:
+- Each score is an integer from 1 to 10.
+- Keep top_gaps to max 4 items.
+- Keep top_improvements to max 3 items.
+- Be concise and specific.
+
+JD summary:
+{json.dumps(jd_info)}
+
+Job Description:
+{jd_text}
+
+Tailored Resume:
+{tailored_text}
+"""
+    client = get_openai_client()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": "You evaluate resume fit clearly and concisely."},
+            {"role": "user", "content": critique_prompt},
+        ],
+    )
+    return json.loads(response.choices[0].message.content)
+
+
+# --- 3. USER INTERFACE ---
 st.title("🎯 Strategic Resume Tailor")
 st.markdown("---")
 
-# --- 2. USER INTERFACE ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -307,182 +582,76 @@ st.markdown("### 📌 Job Tracking")
 save_job_only = st.checkbox("Save this JD to Job Tracker after analysis", value=True)
 show_tracker = st.checkbox("Show saved job tracker table", value=False)
 
-# --- 3. THE LOGIC ---
+# --- 4. APP LOGIC ---
 if st.button("🔥 Analyze & Tailor for this Role"):
-    if not api_key:
-        st.error("Missing API Key. Please add it to Streamlit Secrets or the sidebar.")
+    if strategy_mode == "Daily Driver (GPT-4o-mini)" and not openai_key:
+        st.error("Missing OpenAI API key. Please add it to Streamlit Secrets or the sidebar.")
+    elif strategy_mode == "Dream Job (Gemini 3.1 Pro)" and not (api_key and openai_key):
+        st.error("Dream Job mode uses Gemini for tailoring and GPT-4o-mini for cheap JD extraction. Please provide both API keys.")
     elif not jd_text:
         st.warning("Please paste a Job Description first.")
     else:
-        with st.spinner("🧠 Senior Recruiter is analyzing the JD and pivoting your resume..."):
-            try:
-                # ---------------------------------------------------------
-                # 1. Define the Prompt (We do this first so both models can use it)
-                # ---------------------------------------------------------
-                prompt = rf"""
-                  You are a Senior Career Coach and Expert Technical Recruiter specializing in Data Science, Machine Learning, and Analytics.
-                  Your goal is to strategically rewrite the candidate's LaTeX resume bullets, skills section, education wording, and header location so they closely align with the provided Job Description (JD) while maintaining absolute truthfulness to their core experience.
+        try:
+            with st.spinner("Analyzing the JD and building a lean tailoring plan..."):
+                jd_info = get_jd_intelligence(jd_text)
+                header_location = infer_header_location(jd_info.get("location", ""))
+                degree_title = infer_degree_title(jd_info.get("role_domain", ""), jd_text)
 
-                  CONTEXT FOR THE CANDIDATE:
-                  - Currently pursuing a Master's degree at the University of Minnesota (with a Minor in Business Management).
-                  - Professional Experience: Data Science Intern at Daikin Applied Americas, Data Analyst at TCS (client: Pandora), and Graduate Teaching Assistant for Statistics & AI.
-                  - Technical Stack: Python, Advanced SQL, PySpark, AWS, Azure, and modern ML frameworks (Scikit-learn, PyTorch, Hugging Face).
-                  - Academic Background: Bachelor's in Mechanical Engineering.
-                  - Actual graduate program context: MS in Industrial and Systems Engineering, track in Analytics. This can appropriately be framed, when justified by the JD, as closest to MS in Industrial Engineering, MS in Analytics, or MS in Data Science, but do not overstate or invent a different degree beyond what is reasonably aligned to the candidate's real program.
-                  
-                  STRICT FORMATTING RULE: 
-                  - DO NOT add any markdown formatting (like ** or *) inside the code block.
-                  - DO NOT add spaces between a backslash and the command (e.g., use \begin, NOT \ begin).
-                  - DO NOT add spaces inside curly braces (e.g., use {{center}}, NOT {{ center }}).
-                  - Ensure all LaTeX special characters like $ and & are handled exactly as they appear in the base resume.
+            st.subheader("📋 JD Intelligence")
+            st.json({
+                "role_title": jd_info.get("role_title", ""),
+                "company": jd_info.get("company", ""),
+                "location": jd_info.get("location", ""),
+                "role_domain": jd_info.get("role_domain", ""),
+                "top_keywords": jd_info.get("top_keywords", []),
+                "top_responsibilities": jd_info.get("top_responsibilities", []),
+                "tools": jd_info.get("tools", []),
+                "header_location_selected": header_location,
+                "degree_title_selected": degree_title,
+            })
 
-                  STRICT TAILORING STRATEGY & OUTPUT FORMAT:
-                  1. PURE CODE OUTPUT: Your entire response should be formatted as a single LaTeX code block. Do not include conversational text outside the code block.
-                  2. FIT ASSESSMENT: The very first line of your output must be a LaTeX comment containing the Match Score and a brief summary of the fit.
-                    Format: % Match Assessment: [Score]/10 - [Brief summary of fit and gaps]
-                  3. STRATEGIC PIVOTING & BULLETS: For every bullet point you change, you must use the following strict 4-line structure:
-                    Line 1: % Section: [Education, Work Experience, Skills, or Projects]
-                    Line 2: % Subsection: [e.g., TCS, Daikin, U of M, GlobalMarket AI, End-to-End Recommender System]
-                    Line 3: % Bullet: [e.g., 1st bullet] - [Explain exactly WHY you are changing it based on the JD]
-                    Line 4: \item [The rewritten LaTeX code with keywords in \textbf{{}}]
-                  4. TERMINOLOGY SWAP & METRICS: Ensure every tweaked bullet point includes a metric (%, $, or time) if the original had one. Swap base terms for JD-specific keywords.
-                  5. IMPLICIT NEEDS ANALYSIS: Analyze the JD for implicit requirements and weave those soft skills or secondary technical traits into the experience points.
-                  6. SKILLS SECTION OPTIMIZATION: You MUST maintain the EXACT SAME NUMBER of skills per subsection as the base resume. If you add a required JD skill, you must remove the least relevant base skill to maintain the count. Format each skills line exactly like this:
-                    \textbf{{Subsection Title}} & Skill 1, Skill 2, Skill 3, .... \\[1 pt]
-                  7. HALLUCINATION GUARD: You may reframe, emphasize, or shift the focus of a task, but you may NOT invent new job titles, new companies, fake metrics, fake locations, or unearned degrees.
-                  8. HEADER LOCATION RULE:
-                    - Check the city/state/location of the job posting.
-                    - If the job is in California, change the resume header location from Minneapolis, MN to Dublin, CA.
-                    - If the job is in Washington state, change the resume header location to Seattle, WA.
-                    - If the job is in Texas, change the resume header location to Dallas, TX.
-                    - If the job is in Georgia, change the resume header location to Atlanta, GA.
-                    - If the job is in North Carolina, change the resume header location to High Point, NC
-                    - If the job is in any other U.S. location, choose : Minneapolis, MN.
-                    - Only update the resume header location line. Do not change employer locations inside experience unless explicitly required by the base resume.
-                  9. EDUCATION TITLE ALIGNMENT RULE:
-                    - For the University of Minnesota education entry, choose the most appropriate truthful wording based on the JD from only these options:
-                      a) Master of Science in Industrial Engineering
-                      b) Master of Science in Analytics
-                      c) Master of Science in Data Science
-                    - Pick whichever is closest to the role and JD language.
-                    - Prefer "Industrial Engineering" for operations research, optimization, supply chain, manufacturing, systems, decision science, or OR-heavy roles.
-                    - Prefer "Analytics" for analytics, BI, experimentation, product, business, reporting, or general data roles.
-                    - Prefer "Data Science" for ML, AI, modeling, predictive analytics, NLP, or data science-heavy roles.
-                    - Do not mention "track" unless needed for truthfulness and space allows.
-                    - Do not invent a different university, degree level, graduation date, or credential.
-                  10. FULL-RESUME CONSISTENCY:
-                    - Make sure any chosen location and education title are reflected consistently in the final LaTeX output wherever relevant.
-                    - Preserve formatting, spacing, and LaTeX validity.
-
-                Resume LaTeX:
-                {resume_text}
-
-                Job Description:
-                {jd_text}
-                """
-                # ---------------------------------------------------------
-                # 2. Send the prompt to the selected model
-                # ---------------------------------------------------------
+            with st.spinner("Tailoring the resume..."):
                 if strategy_mode == "Daily Driver (GPT-4o-mini)":
-                    client = openai.OpenAI(api_key=openai_key)
-                    response = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0
+                    prompt = build_daily_driver_prompt(
+                        resume_text=resume_text,
+                        jd_text=jd_text,
+                        jd_info=jd_info,
+                        header_location=header_location,
+                        degree_title=degree_title,
                     )
-                    tailored_text = response.choices[0].message.content
-                    tailored_text = tailored_text.replace("```latex", "").replace("```", "").strip()
                 else:
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-3.1-pro-preview')
-                    response = model.generate_content(prompt)
-                    tailored_text = response.text
-
-                # Now display the result
-                st.subheader("🚀 Your Tailored LaTeX Updates")
-                st.code(tailored_text, language='latex')
-                st.success("Analysis Complete! Copy the snippets above into Overleaf.")
-                st.info("💡 The match score is in the top line of the code block above.")
-
-                # -------------------------------
-                # 2. Extract job info as JSON
-                # -------------------------------
-                job_data = None
-
-                extraction_prompt = f"""
-                Extract structured information from this job description.
-
-                Return ONLY valid JSON in this exact format:
-                {{
-                  "role_title": "",
-                  "company": "",
-                  "location": "",
-                  "experience_years": "",
-                  "tools": []
-                }}
-
-                Rules:
-                - role_title = exact or closest job title
-                - company = employer name if available
-                - location = city/state or remote/hybrid if available
-                - experience_years = use values like "0-2 years", "2+ years", "3-5 years"
-                - tools = list the most important tools/technologies/skills, max 10
-                - normalize tools like Python, SQL, AWS, Tableau, Airflow, Scikit-learn, etc.
-                - return JSON only, with no explanation
-
-                Job Description:
-                {jd_text}
-                """
-
-                # ---------------------------------------------------------
-                # 2. Extract info for Tracker (Always use GPT-4o-mini to save $)
-                # ---------------------------------------------------------
-                try:
-                    # Initialize OpenAI client for extraction
-                    client = openai.OpenAI(api_key=openai_key)
-                    
-                    extraction_response = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[{"role": "user", "content": extraction_prompt}],
-                        temperature=0
+                    prompt = build_dream_job_prompt(
+                        resume_text=resume_text,
+                        jd_text=jd_text,
+                        jd_info=jd_info,
+                        header_location=header_location,
+                        degree_title=degree_title,
                     )
-                    
-                    raw_extraction = extraction_response.choices[0].message.content
-                    
-                    # Optional: st.subheader("🧪 Raw Extraction Response")
-                    # Optional: st.code(raw_extraction, language="json")
-                    
-                    job_data = extract_json_from_response(raw_extraction)
 
-                    st.subheader("📋 Extracted Job Info")
-                    st.json(job_data)
+                tailored_text = run_tailoring_model(prompt, strategy_mode)
 
-                except Exception as extraction_error:
-                    st.error(f"Extraction failed: {extraction_error}")
-                    
-                                    # -------------------------------
-                # 3. Match score parsing
-                # -------------------------------
-                match_score = ""
-                score_match = re.search(r"Match Assessment:\s*([0-9.]+/10)", tailored_text)
-                if score_match:
-                    match_score = score_match.group(1)
+            st.subheader("🚀 Tailored LaTeX Resume")
+            st.code(tailored_text, language='latex')
+            st.success("Tailoring complete. Copy the LaTeX into Overleaf.")
 
-                # -------------------------------
-                # 4. Save to Google Sheets
-                # -------------------------------
-                if save_job_only and job_data is not None:
-                    try:
-                        save_response = save_job_to_gsheet(job_data, jd_text, match_score)
-                        st.success("✅ Job application saved to Google Sheets.")
-                    except Exception as save_error:
-                        st.error(f"Save step failed: {save_error}")
-                elif save_job_only:
-                    st.warning("Job was not saved because extraction failed.")
+            match_score = ""
+            score_match = re.search(r"Match Assessment:\s*([0-9.]+/10)", tailored_text)
+            if score_match:
+                match_score = score_match.group(1)
+                st.info(f"Estimated fit from tailoring model: {match_score}")
 
-            except Exception as e:
-                st.error(f"Error: {e}")
+            if enable_critique:
+                with st.spinner("Running one extra critique pass..."):
+                    critique = run_optional_critique(tailored_text, jd_info, jd_text)
+                st.subheader("🧪 Critique Summary")
+                st.json(critique)
 
+            if save_job_only:
+                save_job_to_gsheet(jd_info, jd_text, match_score)
+                st.success("✅ Job application saved to Google Sheets.")
+
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 if show_tracker:
     try:
