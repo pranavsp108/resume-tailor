@@ -115,8 +115,6 @@ base_resume = r"""
     \href{https://pranavsp108.github.io/}{Portfolio}
 \end{center}
 
-\vspace{1pt}
-
 % ---------- Education ----------
 \section{EDUCATION}
 \noindent
@@ -164,7 +162,7 @@ base_resume = r"""
 \noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
 {\fontsize{11pt}{13pt}\selectfont \textbf{University of Minnesota}} & \textit{Minneapolis, U.S.} 
 \end{tabularx}\vspace{-2pt}
-\roleonly{Graduate Teaching Assistant \ $|$ \; Statistics \& AI Hub}{Jan 2025 -- Present }
+\roleonly{Graduate Teaching Assistant \$|$\; Statistics \& AI Hub}{Jan 2025 -- Present }
 \begin{itemize}
   \item Directed 230+ students and 20+ teams through end-to-end \textbf{AI capstones} and \textbf{statistical modeling}, achieving a \textbf{100\% project completion rate}.
   \item Co-designed assessments and provided technical consultation on \textbf{Python, R}, and \textbf{Responsible AI} principles for undergraduate and graduate cohorts.
@@ -299,21 +297,32 @@ def extract_json_from_response(text: str):
 
 def infer_header_location(job_location: str) -> str:
     location = (job_location or "").lower()
+
+    # Normalize: remove commas and split into words
+    words = re.findall(r'\b[a-z]+\b', location)
+
     mapping = {
         "california": "Dublin, CA",
-        "ca": "Dublin, CA",
+        "CA": "Dublin, CA",
         "washington": "Seattle, WA",
-        "wa": "Seattle, WA",
+        "WA": "Seattle, WA",
         "texas": "Dallas, TX",
-        "tx": "Dallas, TX",
+        "TX": "Dallas, TX",
         "georgia": "Atlanta, GA",
-        "ga": "Atlanta, GA",
+        "GA": "Atlanta, GA",
         "north carolina": "High Point, NC",
-        "nc": "High Point, NC",
+        "NC": "High Point, NC",
     }
-    for key, value in mapping.items():
-        if key in location:
-            return value
+
+    # Check multi-word states first
+    if "north carolina" in location:
+        return "High Point, NC"
+
+    # Then check individual words
+    for word in words:
+        if word in mapping:
+            return mapping[word]
+
     return "Minneapolis, MN"
 
 
