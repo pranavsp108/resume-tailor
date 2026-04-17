@@ -162,7 +162,7 @@ base_resume = r"""
 \noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
 {\fontsize{11pt}{13pt}\selectfont \textbf{University of Minnesota}} & \textit{Minneapolis, U.S.} 
 \end{tabularx}\vspace{-2pt}
-\roleonly{Graduate Teaching Assistant \$|$\; Statistics \& AI Hub}{Jan 2025 -- Present }
+\roleonly{Graduate Teaching Assistant \;|\; Statistics \& AI Hub}{Jan 2025 -- Present }
 \begin{itemize}
   \item Directed 230+ students and 20+ teams through end-to-end \textbf{AI capstones} and \textbf{statistical modeling}, achieving a \textbf{100\% project completion rate}.
   \item Co-designed assessments and provided technical consultation on \textbf{Python, R}, and \textbf{Responsible AI} principles for undergraduate and graduate cohorts.
