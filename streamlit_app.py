@@ -148,13 +148,13 @@ base_resume = r"""
 \noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
 {\fontsize{11pt}{13pt}\selectfont \textbf{Tata Consultancy Services} $|$ \textit{Client: Pandora}} & \textit{Bangalore, India} 
 \end{tabularx}\vspace{-2pt}
-\roleonly{Data Analyst }{Feb 2022 -- Jul 2024 }
+\roleonly{Data Scientist / Data Analyst}{Feb 2022 -- Jul 2024 }
 \begin{itemize}
-  \item Automated 30+ mission-critical \textbf{Python}-based reports for \textbf{global retail operations} (\$4.5B revenue), eliminating 1,000+ manual hours and accelerating \textbf{strategic decision-making}.
-  \item Orchestrated the migration of legacy BizTalk workflows to Azure (Logic Apps, Functions) , reducing data processing workloads by 35\% and slashing operational latency by 20\%.
-  \item Optimized high-volume \textbf{SQL queries} on multi-terabyte \textbf{Big Data} sets, slashing \textbf{dashboard} response times by 40\% for 50+ \textbf{business stakeholders}.
-  \item Fortified \textbf{data integrity} by implementing automated \textbf{validation scripts}, improving \textbf{data accuracy} by 15\% and mitigating \$50k+ in annual revenue leakage.
-  \item Developed a suite of \textbf{Power BI} dashboards for Pandora's executive leadership , translating complex \textbf{ETL} outputs into actionable insights that identified a \textbf{12\% growth opportunity} in underperforming regional markets.
+  \item Developed automated \textbf{Python}-based analytics workflows for global retail operations (\$4.5B revenue), replacing 30+ manual reporting processes and eliminating \textbf{1,000+ hours} of recurring effort.
+  \item Built and migrated scalable data processing workflows using \textbf{Azure Logic Apps, Functions, and SQL}, reducing processing workloads by \textbf{35\%} and operational latency by \textbf{20\%}.
+  \item Analyzed multi-terabyte retail datasets using advanced \textbf{SQL} to identify business trends, optimize reporting logic, and reduce executive dashboard response times by \textbf{40\%} for 50+ stakeholders.
+  \item Implemented automated \textbf{data validation and anomaly detection} checks to strengthen data quality, improving reporting accuracy by \textbf{15\%} and mitigating \textbf{\$50k+} in annual revenue leakage.
+  \item Designed stakeholder-facing \textbf{Power BI} dashboards and KPI analyses that translated complex ETL outputs into actionable insights, uncovering a \textbf{12\% growth opportunity} in underperforming regional markets.
 \end{itemize}
 \entrysep
 
@@ -162,9 +162,9 @@ base_resume = r"""
 \noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
 {\fontsize{11pt}{13pt}\selectfont \textbf{University of Minnesota}} & \textit{Minneapolis, U.S.} 
 \end{tabularx}\vspace{-2pt}
-\roleonly{Graduate Teaching Assistant \;|\; Statistics \& AI Hub}{Jan 2025 -- Present }
+\roleonly{Graduate Teaching Assistant}{Jan 2025 -- Present }
 \begin{itemize}
-  \item Directed 230+ students and 20+ teams through end-to-end \textbf{AI capstones} and \textbf{statistical modeling}, achieving a \textbf{100\% project completion rate}.
+  \item Supported \textbf{DS and AI Hub} coursework by directing 230+ students and 20+ teams through end-to-end \textbf{AI capstones} and \textbf{statistical modeling}, achieving a \textbf{100\% project completion rate}.
   \item Co-designed assessments and provided technical consultation on \textbf{Python, R}, and \textbf{Responsible AI} principles for undergraduate and graduate cohorts.
 \end{itemize}
 
@@ -296,32 +296,62 @@ def extract_json_from_response(text: str):
 
 
 def infer_header_location(job_location: str) -> str:
+    """
+    Deterministic resume header location mapping.
+
+    Rules:
+    - CA / California -> Dublin, CA
+    - WA / Washington State -> Seattle, WA
+    - TX / Texas -> Dallas, TX
+    - GA / Georgia -> Atlanta, GA
+    - NC / North Carolina -> High Point, NC
+    - Everything else -> Minneapolis, MN
+
+    Important:
+    - Washington, DC should NOT map to Seattle.
+    - South Carolina should NOT map to CA or NC.
+    - Chicago should NOT map to CA.
+    """
     location = (job_location or "").lower()
+    location = re.sub(r"[^a-z,\s]", " ", location)
+    location = re.sub(r"\s+", " ", location).strip()
 
-    # Normalize: remove commas and split into words
-    words = re.findall(r'\b[a-z]+\b', location)
+    # Explicitly handle DC first so "Washington, DC" does not become Seattle.
+    if re.search(r"\b(dc|d c|district of columbia)\b", location):
+        return "Minneapolis, MN"
 
-    mapping = {
-        "california": "Dublin, CA",
-        "CA": "Dublin, CA",
-        "washington": "Seattle, WA",
-        "WA": "Seattle, WA",
-        "texas": "Dallas, TX",
-        "TX": "Dallas, TX",
-        "georgia": "Atlanta, GA",
-        "GA": "Atlanta, GA",
-        "north carolina": "High Point, NC",
-        "NC": "High Point, NC",
-    }
-
-    # Check multi-word states first
-    if "north carolina" in location:
+    # Multi-word states first
+    if re.search(r"\bnorth\s+carolina\b", location):
         return "High Point, NC"
 
-    # Then check individual words
-    for word in words:
-        if word in mapping:
-            return mapping[word]
+    # Full state names
+    full_state_mapping = {
+        "california": "Dublin, CA",
+        "texas": "Dallas, TX",
+        "georgia": "Atlanta, GA",
+    }
+
+    for state, resume_location in full_state_mapping.items():
+        if re.search(rf"\b{state}\b", location):
+            return resume_location
+
+    # Washington only if it clearly means Washington State
+    if re.search(r"\bwashington\s+state\b|\bstate\s+of\s+washington\b", location):
+        return "Seattle, WA"
+
+    # State abbreviations as standalone tokens only
+    abbrev_mapping = {
+        "ca": "Dublin, CA",
+        "wa": "Seattle, WA",
+        "tx": "Dallas, TX",
+        "ga": "Atlanta, GA",
+        "nc": "High Point, NC",
+    }
+
+    tokens = re.findall(r"\b[a-z]{2}\b", location)
+    for token in tokens:
+        if token in abbrev_mapping:
+            return abbrev_mapping[token]
 
     return "Minneapolis, MN"
 
@@ -343,6 +373,29 @@ def infer_degree_title(role_domain: str, jd_text: str) -> str:
         return "Master of Science in Industrial Engineering"
     return "Master of Science in Analytics"
 
+def apply_deterministic_resume_overrides(tailored_text: str, header_location: str, degree_title: str) -> str:
+    """
+    Hard override final LaTeX output after the model responds.
+    This prevents the model from accidentally changing deterministic fields.
+    """
+
+    # Force header location before phone number
+    tailored_text = re.sub(
+        r"(\s*)[A-Za-z .,-]+\\\s*\$\|\$\s*\\\s*\(763\)-900-3044",
+        lambda m: f"{m.group(1)}{header_location} \\ $|$ \\ (763)-900-3044",
+        tailored_text,
+        count=1
+    )
+
+    # Force selected education title
+    tailored_text = re.sub(
+        r"Master of Science in (Data Science|Analytics|Industrial Engineering)\s*\\;\|\\;\s*Minor in Business Management",
+        lambda m: f"{degree_title} \\;|\\; Minor in Business Management",
+        tailored_text,
+        count=1
+    )
+
+    return tailored_text
 
 def get_openai_client():
     if not openai_key:
@@ -639,6 +692,11 @@ if st.button("🔥 Analyze & Tailor for this Role"):
 
                 tailored_text = run_tailoring_model(prompt, strategy_mode)
 
+                tailored_text = apply_deterministic_resume_overrides(
+                tailored_text=tailored_text,
+                header_location=header_location,
+                degree_title=degree_title
+                )
             st.subheader("🚀 Tailored LaTeX Resume")
             st.code(tailored_text, language='latex')
             st.success("Tailoring complete. Copy the LaTeX into Overleaf.")
