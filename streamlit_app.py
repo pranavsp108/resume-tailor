@@ -193,10 +193,10 @@ base_resume = r"""
 \entrysep
 
 % --- Recommender System ---
-\projectheader{End-to-End Recommender System}{Jun 2025 -- Aug 2025 }
+\projectheader{Scalable Grocery Reorder Prediction \& Recommendation Engine}{Jun 2025 -- Aug 2025 }
 \begin{itemize}
-  \item Engineered a \textbf{PySpark} data pipeline and trained a \textbf{Scikit-learn} collaborative filtering model, increasing user engagement by \textbf{25\%}.
-  \item Deployed the model as a containerized \textbf{(Docker) REST API} on \textbf{Azure} to serve real-time predictions.
+  \item Built a \textbf{PySpark + Databricks} pipeline on \textbf{30M+ Instacart records}, engineering leakage-safe user-product features and training \textbf{Spark ML Gradient-Boosted Trees} for next-basket reorder prediction.
+  \item Achieved \textbf{0.409 PR-AUC}, \textbf{~4x lift over baseline}, and \textbf{58\% Recall@10}; added \textbf{FP-Growth} cross-sell rules and customer segmentation.
 \end{itemize}
 
 \entrysep
