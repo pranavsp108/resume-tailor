@@ -7,6 +7,7 @@ from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
+from pathlib import Path
 
 # --- 1. CONFIG & SECRETS ---
 st.set_page_config(page_title="Pranav's Resume Tailor", layout="wide", page_icon="🎯")
@@ -32,184 +33,35 @@ enable_critique = st.sidebar.checkbox(
     help="Runs one extra cheap scoring pass after tailoring. Leave off to minimize cost."
 )
 
-# Pulls your base LaTeX from secrets to keep this file light
-base_resume = r"""
-%% Pranav Padmannavar — Resume LaTeX Source
-%% Font: Computer Modern (LaTeX default), sizes scaled down slightly
-
-\documentclass[10pt,letterpaper]{article}
-
-% ---------- Packages ----------
-\usepackage[
-  top=0.4in, bottom=0.4in,
-  left=0.6in, right=0.6in
-]{geometry}
-\usepackage{enumitem}
-\usepackage{titlesec}
-\usepackage{hyperref}
-\usepackage{microtype}
-\usepackage{array}
-\usepackage{tabularx}
-
-% Suppress parskip — we control all spacing manually
-\setlength{\parskip}{0pt}
-\setlength{\parindent}{0pt}
-
-% ---------- Hyperlink styling ----------
-\hypersetup{
-  colorlinks=true,
-  urlcolor=black,
-  linkcolor=black
+# --- 1A. BASE RESUME SELECTION ---
+RESUME_FILES = {
+    "Data Scientist": "Pranav_DS.tex",
+    "Data Analyst": "Pranav_DA.tex",
 }
 
-% ---------- No page numbers ----------
-\pagestyle{empty}
+resume_profile = st.sidebar.radio(
+    "📄 Base Resume",
+    ["Data Scientist", "Data Analyst"],
+    index=0,
+    help="Manually choose the base resume to tailor. This keeps tailoring focused and avoids mixing DS and DA positioning."
+)
 
-% ---------- Section formatting ----------
-\titleformat{\section}
-  {\normalfont\normalsize\bfseries}
-  {}{0em}{}
-  [\vspace{-9pt}\rule{\linewidth}{0.4pt}]
-\titlespacing{\section}{0pt}{4pt}{0pt}
+@st.cache_data(show_spinner=False)
+def load_resume_template(resume_profile: str) -> str:
+    """
+    Loads the selected base LaTeX resume from a local .tex file.
+    Keep Pranav_DS.tex and Pranav_DA.tex in the same folder as streamlit_app.py.
+    """
+    app_dir = Path(__file__).parent
+    resume_filename = RESUME_FILES[resume_profile]
+    resume_path = app_dir / resume_filename
 
-% ---------- List settings ----------
-\setlist[itemize]{
-  leftmargin=1.2em,
-  topsep=1pt,
-  itemsep=0pt,
-  parsep=0pt,
-  partopsep=0pt,
-  label=\textbullet
-}
+    if not resume_path.exists():
+        raise FileNotFoundError(
+            f"Could not find {resume_filename}. Make sure it is in the same folder as streamlit_app.py."
+        )
 
-% ---------- Custom commands ----------
-\newcommand{\roleonly}[2]{%
-  \noindent
-  \begin{tabularx}{\linewidth}{@{}X r@{}}
-    \textit{#1} & \textit{#2}
-  \end{tabularx}\vspace{0pt}%
-}
-
-\newcommand{\projectheader}[2]{%
-  \noindent
-  \begin{tabularx}{\linewidth}{@{}X r@{}}
-    \textbf{#1} & \textit{#2}
-  \end{tabularx}\vspace{0pt}%
-}
-
-% Separator between entries
-\newcommand{\entrysep}{\vspace{2pt}}
-
-% ======================================================
-\begin{document}
-% ======================================================
-
-% ---------- Header ----------
-\begin{center}
-  {\large\textbf{Pranav Padmannavar}} \\[2pt]
-  \small
-    Minneapolis, MN \ $|$ \ (763)-900-3044 \ $|$ \ 
-    \href{mailto:pranavsp108@gmail.com}{pranavsp108@gmail.com} \ $|$ \ 
-    \href{https://www.linkedin.com/in/pranavsp108/}{LinkedIn} \ $|$ \ 
-    \href{https://github.com/pranavsp108}{github} \ $|$ \ 
-    \href{https://pranavsp108.github.io/}{Portfolio}
-\end{center}
-
-% ---------- Education ----------
-\section{EDUCATION}
-\noindent
-\begin{tabularx}{\linewidth}{@{}X r@{}}
-  \textbf{University of Minnesota Twin Cities} & \textit{Sep 2024 -- May 2026 } \\[-1pt]
-  Master of Science in Data Science \;|\; Minor in Business Management & 3.7 / 4.0
-\end{tabularx}
-\vspace{1pt}
-\noindent
-\begin{tabularx}{\linewidth}{@{}X r@{}}
-  \textbf{Visvesvaraya Technological University} & \textit{Sep 2017 -- May 2021 } \\[-1pt]
-  Bachelor of Engineering in Mechanical Engineering & 3.4 / 4.0
-\end{tabularx}
-
-% ---------- Work Experience ----------
-\section{WORK EXPERIENCE}
-% --- Daikin ---
-\noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
-{\fontsize{11pt}{13pt}\selectfont \textbf{Daikin Applied Americas} } & \textit{Minneapolis, U.S.}
-\end{tabularx}\vspace{-2pt}
-\roleonly{Data Science and Optimization Intern}{Aug 2025 -- Dec 2025 }
-\begin{itemize}
-  \item Identified \textbf{\$1.5M+ in annual manufacturing cost savings} (4-5\% reduction per unit) by automating the analysis of 2,000+ design parameters and recommending optimal material configurations.
-  \item Engineered a \textbf{predictive optimization framework (LightGBM, Scikit-learn)} for flagship HVAC lines, accelerating simulation runtime by \textbf{90\%} (reducing compute time from hours to minutes).
-  \item Saved \textbf{1,000+ engineering hours} annually (~\$150k productivity) by enabling rapid validation of complex thermal scenarios and significantly shortening the \textbf{R\&D feedback loop}.
-\end{itemize}
-
-\entrysep
-
-% --- TCS ---
-\noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
-{\fontsize{11pt}{13pt}\selectfont \textbf{Tata Consultancy Services} $|$ \textit{Client: Pandora}} & \textit{Bangalore, India} 
-\end{tabularx}\vspace{-2pt}
-\roleonly{Data Scientist / Data Analyst}{Feb 2022 -- Jul 2024 }
-\begin{itemize}
-  \item Developed automated \textbf{Python}-based analytics workflows for global retail operations (\$4.5B revenue), replacing 30+ manual reporting processes and eliminating \textbf{1,000+ hours} of recurring effort.
-  \item Built and migrated scalable data processing workflows using \textbf{Azure Logic Apps, Functions, and SQL}, reducing processing workloads by \textbf{35\%} and operational latency by \textbf{20\%}.
-  \item Analyzed multi-terabyte retail datasets using advanced \textbf{SQL} to identify business trends, optimize reporting logic, and reduce executive dashboard response times by \textbf{40\%} for 50+ stakeholders.
-  \item Implemented automated \textbf{data validation and anomaly detection} checks to strengthen data quality, improving reporting accuracy by \textbf{15\%} and mitigating \textbf{\$50k+} in annual revenue leakage.
-  \item Designed stakeholder-facing \textbf{Power BI} dashboards and KPI analyses that translated complex ETL outputs into actionable insights, uncovering a \textbf{12\% growth opportunity} in underperforming regional markets.
-\end{itemize}
-\entrysep
-
-% --- UMN Teaching Assistant ---
-\noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
-{\fontsize{11pt}{13pt}\selectfont \textbf{University of Minnesota}} & \textit{Minneapolis, U.S.} 
-\end{tabularx}\vspace{-2pt}
-\roleonly{Graduate Teaching Assistant}{Jan 2025 -- Present }
-\begin{itemize}
-  \item Supported \textbf{DS and AI Hub} coursework by directing 230+ students and 20+ teams through end-to-end \textbf{AI capstones} and \textbf{statistical modeling}, achieving a \textbf{100\% project completion rate}.
-  \item Co-designed assessments and provided technical consultation on \textbf{Python, R}, and \textbf{Responsible AI} principles for undergraduate and graduate cohorts.
-\end{itemize}
-
-% ---------- Skills ----------
-\section{SKILLS}
-\noindent
-\begin{tabularx}{\linewidth}{@{}lX@{}}
-  \textbf{Languages:} & Python, Advanced SQL, R, Bash, Git \\[1pt]
-  \textbf{ML \& Frameworks:} & Pandas, NumPy, Scikit-learn, PyTorch, TensorFlow, Hugging Face, XGBoost, LightGBM \\[1pt]
-  \textbf{Statistics \& Modeling:} & A/B Testing, Hypothesis Testing, Causal Inference, Time-Series, Statistical Modeling, LSTM \\[1pt]
-  \textbf{Big Data \& MLOps:} & PySpark, Databricks, Airflow, Kafka, MLflow, Docker, Kubernetes, CI/CD, Github Actions \\[1pt]
-  \textbf{Databases \& Cloud:} & Azure, AWS (S3, EC2, SageMaker), GCP (BigQuery, Vertex AI), PostgreSQL, MySQL \\[1pt]
-  \textbf{Data Visualization:} & Tableau, Power BI, Data Storytelling \\
-\end{tabularx}
-
-% ---------- Academic Project Experience ----------
-\section{ACADEMIC PROJECT EXPERIENCE}
-
-% --- GlobalMarket AI ---
-\projectheader{\href{\detokenize{https://github.com/pranavsp108/stock-market-pipeline}}{{\fontsize{11pt}{13pt}\selectfont GlobalMarket AI: Autonomous MLOps Pipeline for Predictive Finance}}}{Jan 2026 -- Mar 2026}
-\begin{itemize}
-  \item Engineered an automated pipeline using \textbf{Kafka} and \textbf{GitHub Actions} to ingest 26+ years of market data into an \textbf{S3-backed Data Lake}.
-  \item Developed a stacked \textbf{LSTM Neural Network (TensorFlow)} on \textbf{AWS EC2}, utilizing a "zero-touch" \textbf{MLOps} workflow for daily model retraining.
-\end{itemize}
-
-\entrysep
-
-% --- Recommender System ---
-\projectheader{Scalable Grocery Reorder Prediction \& Recommendation Engine}{Jun 2025 -- Aug 2025 }
-\begin{itemize}
-  \item Built a \textbf{PySpark + Databricks} pipeline on \textbf{30M+ Instacart records}, engineering leakage-safe user-product features and training \textbf{Spark ML Gradient-Boosted Trees} for next-basket reorder prediction.
-  \item Achieved \textbf{0.409 PR-AUC}, \textbf{~4x lift over baseline}, and \textbf{58\% Recall@10}; added \textbf{FP-Growth} cross-sell rules and customer segmentation.
-\end{itemize}
-
-\entrysep
-
-% --- Demand Forecasting ---
-\projectheader{Demand Forecasting \& Inventory Optimization}{Aug 2024 -- Dec 2024 }
-\begin{itemize}
-  \item Developed \textbf{time-series forecasting} models that projected a \textbf{15\% reduction in inventory costs} and improved order fulfillment rates by \textbf{28\%}.
-\end{itemize}
-
-% ======================================================
-\end{document}
-"""
+    return resume_path.read_text(encoding="utf-8")
 
 # --- 1B. GOOGLE SHEETS HELPERS ---
 def get_gsheet():
@@ -355,24 +207,6 @@ def infer_header_location(job_location: str) -> str:
 
     return "Minneapolis, MN"
 
-
-def infer_degree_title(role_domain: str, jd_text: str) -> str:
-    domain = (role_domain or "").lower()
-    jd_lower = (jd_text or "").lower()
-
-    if any(term in domain for term in ["operations research", "optimization", "industrial", "supply chain"]):
-        return "Master of Science in Industrial Engineering"
-    if any(term in domain for term in ["marketing analytics", "product analytics", "business intelligence", "analytics", "data analyst"]):
-        return "Master of Science in Analytics"
-    if any(term in domain for term in ["machine learning", "data science", "ai", "nlp"]):
-        return "Master of Science in Data Science"
-
-    if any(term in jd_lower for term in ["machine learning", "artificial intelligence", "predictive", "nlp"]):
-        return "Master of Science in Data Science"
-    if any(term in jd_lower for term in ["operations research", "optimization", "industrial engineering", "supply chain"]):
-        return "Master of Science in Industrial Engineering"
-    return "Master of Science in Analytics"
-
 def apply_deterministic_resume_overrides(tailored_text: str, header_location: str, degree_title: str) -> str:
     """
     Hard override final LaTeX output after the model responds.
@@ -405,111 +239,203 @@ def get_openai_client():
 
 def get_jd_intelligence(jd_text: str) -> dict:
     """
-    One cheap structured pass reused for:
-    - role/domain understanding
-    - prompt grounding
-    - job tracker extraction
-    This replaces the old separate tracker extraction call.
+    Cheap structured JD analysis pass.
+    Goal: extract only the signals needed for focused resume tailoring.
+    Does NOT choose DS vs DA because base resume selection is manual.
     """
+
+    cleaned_jd = re.sub(r"\s+", " ", jd_text).strip()
+
+    # Keeps cost/token usage lower without losing the important JD content.
+    # Most useful job details appear in the first several thousand characters.
+    cleaned_jd = cleaned_jd[:12000]
+
     extraction_prompt = f"""
-You are an expert recruiter.
+You are an expert US data-role recruiter and ATS analyst.
+
 Analyze the job description and return ONLY valid JSON.
 
-Required schema:
+Your goal is to extract concise, high-value signals for resume tailoring.
+Do NOT over-extract.
+Do NOT include generic soft skills unless they are clearly emphasized.
+Do NOT infer tools that are not mentioned or strongly implied.
+
+Required JSON schema:
 {{
   "role_title": "",
   "company": "",
   "location": "",
   "experience_years": "",
-  "tools": [],
   "role_domain": "",
+  "seniority": "",
+  "tools": [],
   "top_keywords": [],
   "top_responsibilities": [],
-  "top_business_skills": []
+  "top_business_skills": [],
+  "tailoring_focus": [],
+  "possible_skill_substitutions": [],
+  "low_priority_or_risky_keywords": []
 }}
 
-Rules:
-- role_title: exact or closest title.
-- company: employer name if available.
+Field rules:
+- role_title: exact or closest role title.
+- company: employer name if available; otherwise empty string.
 - location: city/state/remote/hybrid if available.
-- experience_years: concise string like "0-2 years", "2+ years", "3-5 years".
-- tools: max 10 normalized tools/technologies.
-- role_domain: choose the single best fit such as Marketing Analytics, Product Analytics, Business Intelligence, Data Science, Machine Learning, Data Engineering, Operations Research, General Analytics.
-- top_keywords: max 10 ATS keywords actually important for fit.
-- top_responsibilities: max 5 action-oriented responsibilities.
-- top_business_skills: max 4 business or soft skills.
-- Return JSON only.
+- experience_years: concise string like "0-2 years", "2+ years", "3-5 years", or empty string.
+- role_domain: choose ONE best fit:
+  "Data Science", "Product Analytics", "Data Analytics", "Business Intelligence",
+  "Marketing Analytics", "Risk Analytics", "Operations Analytics",
+  "Machine Learning", "Data Engineering", or "Other".
+- seniority: choose ONE:
+  "Entry Level", "Early Career", "Mid Level", "Senior", or "Unclear".
+- tools: max 8 important tools/platforms/languages explicitly mentioned or strongly implied.
+- top_keywords: max 8 ATS keywords that matter most for this role.
+- top_responsibilities: max 4 concrete responsibilities from the JD.
+- top_business_skills: max 4 business/domain skills such as stakeholder management, product insights, experimentation, reporting, decision support.
+- tailoring_focus: max 4 short phrases describing what the resume should emphasize.
+- possible_skill_substitutions: max 3 safe adjacent substitutions that could help ATS fit.
+  Examples:
+  "Power BI -> Tableau", "PostgreSQL -> BigQuery", "LightGBM -> XGBoost", "SQL -> Snowflake".
+  Only include substitutions if they are realistic and adjacent.
+- low_priority_or_risky_keywords: max 4 JD keywords that should NOT be overemphasized unless already supported.
+
+Return JSON only.
 
 Job Description:
-{jd_text}
+{cleaned_jd}
 """
+
     client = get_openai_client()
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         temperature=0,
+        max_tokens=900,
         response_format={"type": "json_object"},
         messages=[
-            {"role": "system", "content": "You extract structured job information accurately and concisely."},
-            {"role": "user", "content": extraction_prompt},
+            {
+                "role": "system",
+                "content": "You extract concise, accurate job-description intelligence for focused resume tailoring."
+            },
+            {
+                "role": "user",
+                "content": extraction_prompt
+            },
         ],
     )
+
     return json.loads(response.choices[0].message.content)
 
 
-def build_daily_driver_prompt(resume_text: str, jd_text: str, jd_info: dict, header_location: str, degree_title: str) -> str:
+def build_daily_driver_prompt(
+    resume_text: str,
+    jd_text: str,
+    jd_info: dict,
+    header_location: str,
+    degree_title: str,
+    resume_profile: str,
+) -> str:
+    """
+    Lean OpenAI prompt for GPT-4o-mini.
+    Goal: controlled micro-tailoring, not full resume rewriting.
+    """
+
+    if resume_profile == "Data Scientist":
+        profile_guidance = """
+SELECTED RESUME IDENTITY: DATA SCIENTIST
+
+Keep the resume focused on:
+- Python, SQL, predictive modeling, statistical analysis, experimentation, optimization, forecasting, recommendation systems, and business impact.
+- Good DS tailoring can emphasize: Scikit-learn, LightGBM, XGBoost, TensorFlow, feature engineering, model evaluation, A/B testing, causal inference, BigQuery, PySpark, Databricks, AWS, Azure, Tableau, Power BI.
+- Do NOT drift into a broad ML Engineer, Data Engineer, MLOps Engineer, or GenAI Engineer resume.
+- Avoid adding unsupported infrastructure-heavy tools such as Kubernetes, Airflow, Kafka, MLflow, Docker, SageMaker, Vertex AI, Hugging Face, or PyTorch unless already present in the selected base resume or clearly required by the JD and strongly supported by a project.
+"""
+    else:
+        profile_guidance = """
+SELECTED RESUME IDENTITY: DATA ANALYST
+
+Keep the resume focused on:
+- SQL, Python, dashboards, KPI reporting, data quality, funnel/cohort analysis, customer segmentation, A/B testing, business insights, and stakeholder decision support.
+- Good DA tailoring can emphasize: Excel, Tableau, Power BI, BigQuery, PostgreSQL, MySQL, Azure, PySpark, ETL workflows, executive reporting, dashboard design, revenue analysis, product analytics, and data storytelling.
+- Do NOT make this resume ML-heavy or turn it into a Data Scientist, Data Engineer, MLOps, or GenAI resume.
+- Avoid adding unsupported ML/cloud tools such as TensorFlow, PyTorch, Hugging Face, Kubernetes, MLflow, SageMaker, Vertex AI, or deep learning unless already present in the selected base resume.
+"""
+
     return rf"""
-You are a precise resume tailoring assistant for analytics and data roles.
+You are a senior resume tailoring assistant for US data roles.
 
-Your task is to tailor the LaTeX resume for the job description using the structured JD summary below.
-Be efficient, truthful, and selective. Improve only lines that materially increase fit.
+Your job is to make CONTROLLED, RECRUITER-BELIEVABLE micro-edits to the selected base resume so it aligns better with the job description.
 
-CANDIDATE FACTS YOU MUST RESPECT:
-- University of Minnesota graduate program is truthfully closest to one of: Master of Science in Industrial Engineering, Master of Science in Analytics, or Master of Science in Data Science.
-- Do not invent titles, companies, metrics, locations, tools, projects, or degrees.
-- Preserve existing metrics if they already exist.
-- Keep the overall one-page LaTeX structure intact.
+This is NOT a full rewrite.
+This is NOT keyword stuffing.
+This is NOT a generic ATS rewrite.
 
-DETERMINISTIC SETTINGS ALREADY CHOSEN:
-- Header location to use: {header_location}
-- Education title to use: {degree_title}
+The candidate already has separate focused base resumes. Your job is to preserve the selected resume identity and make small, high-impact adjustments.
+
+{profile_guidance}
+
+FIXED FACTS — DO NOT CHANGE:
+- Candidate name, phone number, email, links, companies, dates, degree, GPA, and section order.
+- Degree title must remain exactly: {degree_title}
+- Do NOT change the Education section except preserving formatting.
+- Header location must be exactly: {header_location}
+- Keep the resume one-page friendly.
+- Keep LaTeX valid.
 
 STRUCTURED JD SUMMARY:
 - Role title: {jd_info.get('role_title', '')}
 - Company: {jd_info.get('company', '')}
 - Location: {jd_info.get('location', '')}
 - Role domain: {jd_info.get('role_domain', '')}
+- Seniority: {jd_info.get('seniority', '')}
+- Experience years: {jd_info.get('experience_years', '')}
+- Important tools: {', '.join(jd_info.get('tools', []))}
 - Top keywords: {', '.join(jd_info.get('top_keywords', []))}
 - Top responsibilities: {' | '.join(jd_info.get('top_responsibilities', []))}
-- Top business skills: {', '.join(jd_info.get('top_business_skills', []))}
-- Important tools: {', '.join(jd_info.get('tools', []))}
+- Business skills: {', '.join(jd_info.get('top_business_skills', []))}
+- Tailoring focus: {', '.join(jd_info.get('tailoring_focus', []))}
+- Possible safe skill substitutions: {', '.join(jd_info.get('possible_skill_substitutions', []))}
+- Low-priority or risky keywords: {', '.join(jd_info.get('low_priority_or_risky_keywords', []))}
 
-DOMAIN GUIDANCE:
-- If the role domain is Marketing Analytics, emphasize customer behavior, segmentation, campaign or channel insights, business intelligence, dashboards, and stakeholder decision support.
-- If the role domain is Business Intelligence or General Analytics, emphasize SQL, dashboards, KPIs, reporting, business partnership, and decision support.
-- If the role domain is Data Science or Machine Learning, emphasize modeling, experimentation, prediction, and technical depth.
-- If the role domain is Data Engineering, emphasize pipelines, warehousing, reliability, and scale.
+MICRO-TAILORING RULES:
+1. Preserve the selected resume's core identity: {resume_profile}.
+2. Rewrite only bullets that materially improve fit for this JD.
+3. Keep the same sections, same jobs, same projects, same bullet count, and similar bullet length.
+4. Start every bullet with a strong action verb.
+5. Keep measurable outcomes and quantified impact wherever already present.
+6. Prefer sharper wording over adding more words.
+7. Do not make vague claims such as "leveraged data" or "worked with stakeholders" without a clear outcome.
+8. Do not copy long phrases from the JD.
 
-BULLET REWRITE RULE:
-Every rewritten bullet should follow this pattern as closely as the original facts allow:
-[Action] + [Tool or method] + [business problem or analysis] + [quantified impact] + [JD-aligned outcome]
+SKILL TAILORING RULES:
+- You may add or replace at most 1-2 skills total in the Skills section if they are highly relevant to the JD.
+- Use "Possible safe skill substitutions" as guidance for the 1-2 allowed skill changes.
+- Avoid emphasizing "Low-priority or risky keywords" unless they are already strongly supported by the selected base resume.
+- Use "Tailoring focus" to decide which bullets deserve small edits.
+- Only add a skill if it is adjacent to the candidate's existing experience or can be credibly defended through the listed work/projects.
 
-IMPORTANT STYLE RULES:
-- Prefer natural recruiter language over copying long JD phrases.
-- Use JD terminology selectively, not mechanically.
-- Prioritize the TCS / Pandora bullets first for business-facing analyst roles.
-- Reduce unnecessary MLOps emphasis if the role is analyst or BI oriented.
-- Maintain the exact same number of skills in each skills subsection.
-- If you add a JD-relevant skill, remove a less relevant one from the same subsection.
+CONTROLLED TOOL SUBSTITUTION RULE:
+- If the JD strongly prefers a tool that is very close to an existing tool, you may make a careful substitution in the Skills section or a project bullet.
+- Examples of acceptable adjacent substitutions:
+  - BigQuery / Snowflake / PostgreSQL / MySQL for SQL warehouse/database context, only when SQL analytics is already central.
+  - Tableau / Power BI / Looker Studio for BI dashboarding context, only when dashboarding is already central.
+  - XGBoost / LightGBM / Scikit-learn for tree-based modeling context, only when modeling is already central.
+  - AWS / Azure for cloud analytics context, only when cloud/data workflows are already present.
+- Do NOT claim production ownership of a tool if the base resume does not support it.
+- Do NOT add Kubernetes, production MLOps, GenAI, LLMs, or deep learning unless the selected base resume already supports it.
 
-LATEX RULES:
-- Return only the final LaTeX inside a single code block.
-- First line must be a LaTeX comment in this format:
-  % Match Assessment: [score]/10 - [brief summary]
+BULLET STYLE:
+Each rewritten bullet should follow:
+[Action Verb] + [Tool/Method] + [Business or analytical problem] + [Quantified result or decision impact]
+
+OUTPUT RULES:
+- Return only the final LaTeX resume inside a single ```latex code block.
+- First line must be:
+  % Match Assessment: [score]/10 - [brief fit summary]
 - Do not add prose outside the code block.
-- Keep LaTeX valid. Do not add markdown formatting inside the code.
-- Preserve special characters carefully.
+- Keep LaTeX valid.
+- Preserve special characters and escaping.
 
-BASE RESUME:
+SELECTED BASE RESUME:
 {resume_text}
 
 JOB DESCRIPTION:
@@ -517,36 +443,141 @@ JOB DESCRIPTION:
 """
 
 
-def build_dream_job_prompt(resume_text: str, jd_text: str, jd_info: dict, header_location: str, degree_title: str) -> str:
-    return rf"""
-You are a Senior Career Coach and Expert Technical Recruiter specializing in Data Science, Machine Learning, Analytics, Product Analytics, and Business Intelligence roles.
-Your job is to strategically tailor the candidate's LaTeX resume so it aligns closely with the job description while staying fully truthful to the candidate's real experience.
+def build_dream_job_prompt(
+    resume_text: str,
+    jd_text: str,
+    jd_info: dict,
+    header_location: str,
+    degree_title: str,
+    resume_profile: str,
+) -> str:
+    """
+    Premium single-pass tailoring prompt for Dream Job mode.
+    Goal: higher-quality strategic tailoring without extra critique passes.
+    """
 
-CANDIDATE CONTEXT:
-- University of Minnesota graduate program should be represented truthfully using this chosen title: {degree_title}
-- Professional experience includes Daikin Applied Americas, Tata Consultancy Services (client: Pandora), and University of Minnesota teaching work.
-- Technical stack includes Python, SQL, R, PySpark, AWS, Azure, analytics, dashboards, and modern ML frameworks.
-- Header location has already been chosen and must be used exactly as: {header_location}
+    if resume_profile == "Data Scientist":
+        profile_guidance = """
+SELECTED RESUME IDENTITY: DATA SCIENTIST
+
+Preserve a focused applied Data Scientist profile:
+- Core strengths: Python, SQL, statistical modeling, predictive modeling, feature engineering, model evaluation, experimentation, optimization, forecasting, anomaly detection, recommendation systems, and business impact.
+- Strong supported tools/concepts: Scikit-learn, XGBoost, LightGBM, TensorFlow, A/B Testing, Causal Inference, PySpark, Databricks, BigQuery, AWS, Azure, Tableau, Power BI.
+- Good tailoring direction: emphasize modeling, experimentation, statistical rigor, prediction, optimization, and measurable decision impact.
+- Do NOT turn this into a Data Analyst, Data Engineer, MLOps Engineer, ML Engineer, or GenAI resume.
+"""
+        avoid_guidance = """
+Avoid unsupported or distracting DS breadth:
+- Do not add Kubernetes, production MLOps, Airflow, Kafka, MLflow, Docker, SageMaker, Vertex AI, Hugging Face, PyTorch, LLMs, or GenAI unless already present in the selected base resume or directly defensible through a listed project.
+"""
+    else:
+        profile_guidance = """
+SELECTED RESUME IDENTITY: DATA ANALYST
+
+Preserve a focused Data Analyst / Product Analyst / BI Analyst profile:
+- Core strengths: SQL, Python, dashboards, KPI reporting, data cleaning, data quality, ETL workflows, funnel analysis, cohort analysis, customer segmentation, A/B testing, revenue analysis, and stakeholder decision support.
+- Strong supported tools/concepts: Tableau, Power BI, Excel, BigQuery, PostgreSQL, MySQL, Azure, PySpark, Pandas, NumPy, Executive Reporting, Dashboard Design, Data Storytelling.
+- Good tailoring direction: emphasize business insights, reporting automation, metric design, dashboarding, product/customer analytics, and measurable business outcomes.
+- Do NOT turn this into a Data Scientist, ML Engineer, Data Engineer, MLOps Engineer, or GenAI resume.
+"""
+        avoid_guidance = """
+Avoid unsupported or distracting DA breadth:
+- Do not add TensorFlow, PyTorch, Hugging Face, LSTM, deep learning, Kubernetes, MLflow, SageMaker, Vertex AI, production MLOps, or GenAI unless already present in the selected base resume.
+"""
+
+    return rf"""
+You are a senior US technical recruiter, resume strategist, and ATS-aware editor for data roles.
+
+This is DREAM JOB mode, so your task is to make the selected resume highly aligned to the job description while remaining focused, believable, and interview-defensible.
+
+Do this in ONE high-quality pass.
+Do not produce analysis, notes, explanations, or a critique.
+Return only the final tailored LaTeX resume.
+
+The candidate now has separate focused base resumes. Your most important job is to preserve the selected resume identity and make high-return edits only.
+
+{profile_guidance}
+
+{avoid_guidance}
+
+FIXED FACTS — NEVER CHANGE:
+- Candidate name, phone number, email, links, companies, dates, degree, GPA, and section order.
+- Degree title must remain exactly: {degree_title}
+- Do NOT modify the Education section except preserving formatting.
+- Header location must be exactly: {header_location}
+- Keep the resume one-page friendly.
+- Keep LaTeX valid.
 
 STRUCTURED JD INTELLIGENCE:
 {json.dumps(jd_info, indent=2)}
 
-TAILORING GOALS:
-1. Improve ATS keyword coverage.
-2. Improve responsibility alignment.
-3. Improve domain alignment for the role domain: {jd_info.get('role_domain', '')}.
-4. Keep the output natural and recruiter-believable.
-5. Avoid obvious copy-paste phrasing from the JD.
+HIGH-VALUE TAILORING SIGNALS:
+- Tailoring focus: {', '.join(jd_info.get('tailoring_focus', []))}
+- Possible safe skill substitutions: {', '.join(jd_info.get('possible_skill_substitutions', []))}
+- Low-priority or risky keywords: {', '.join(jd_info.get('low_priority_or_risky_keywords', []))}
 
-REWRITE STRATEGY:
-- Rewrite only where useful; keep strong original bullets when they already fit.
-- Prioritize the most relevant bullets and skills first.
-- Keep metrics whenever they already exist.
-- Use this bullet formula where possible:
-  [Action] + [Tool/Method] + [Business Problem] + [Quantified Impact] + [JD-aligned outcome]
-- If the role is analyst, BI, or marketing-facing, emphasize dashboards, stakeholder partnership, data quality, business insights, and decision support.
-- If the role is DS/ML-heavy, emphasize modeling, experimentation, statistical rigor, and predictive impact.
-- Keep the exact same number of skills within each skill subsection.
+Use the tailoring focus to decide which bullets deserve edits.
+Use possible safe skill substitutions only for 1-2 controlled skill changes.
+Avoid low-priority or risky keywords unless already supported by the selected base resume.
+
+PREMIUM TAILORING OBJECTIVE:
+Make this resume look like a focused, credible fit for the role by improving:
+1. Role alignment
+2. Keyword coverage
+3. Business relevance
+4. Bullet specificity
+5. Recruiter trust
+
+But avoid over-tailoring. The final resume should still look like the same candidate, not a JD copy.
+
+EDITING SCOPE:
+- Keep the same jobs, same projects, same section order, and same number of bullets.
+- Rewrite only the bullets where the JD fit can be materially improved.
+- You may improve up to 6 bullets across the resume if useful.
+- You may add or replace at most 1-2 skills total in the Skills section.
+- Do not expand the Skills section length.
+- Do not add new projects or remove existing projects.
+- Do not change quantified results unless the resume already contains those metrics.
+
+SKILL AND TOOL RULES:
+- Prioritize skills that are both important in the JD and supported by the selected resume.
+- You may make 1-2 adjacent substitutions when they improve ATS fit and remain defensible.
+- Acceptable adjacent substitutions:
+  - SQL warehouse/database context: BigQuery, Snowflake, PostgreSQL, MySQL
+  - BI/dashboard context: Tableau, Power BI, Looker Studio
+  - DS modeling context: Scikit-learn, XGBoost, LightGBM
+  - Cloud analytics context: AWS, Azure
+  - Product analytics context: GA4, A/B Testing, Funnel Analysis, Cohort Analysis
+- If adding one skill, remove a less relevant skill from the same row.
+- Do not add tools that make the resume look wider than the selected profile.
+- Do not add a JD skill if there is no credible way to support it through work experience or projects.
+
+BULLET WRITING RULES:
+Every rewritten bullet should be crisp and follow this pattern where possible:
+[Strong action verb] + [tool/method] + [business or analytical problem] + [quantified impact or decision outcome]
+
+Good bullet qualities:
+- Starts with an action verb
+- Uses specific tools/methods naturally
+- Has measurable output or impact
+- Avoids vague phrasing
+- Avoids obvious JD copy-paste
+- Sounds believable in an interview
+
+ROLE-SPECIFIC PRIORITIZATION:
+- For Data Scientist roles: prioritize modeling, experimentation, statistical rigor, feature engineering, forecasting, optimization, anomaly detection, and model evaluation.
+- For Product DS / Decision Scientist roles: prioritize experimentation, causal inference, segmentation, funnel/cohort analysis, and product/business impact.
+- For Data Analyst / BI roles: prioritize SQL, dashboards, KPI reporting, data quality, stakeholder reporting, Tableau/Power BI, and business insights.
+- For Product Analyst roles: prioritize funnel analysis, cohort retention, segmentation, experimentation, revenue metrics, and product decision support.
+
+QUALITY BAR:
+Before finalizing, silently check:
+- Does the resume still match the selected profile: {resume_profile}?
+- Are all added skills supported or adjacent enough to defend?
+- Did the resume become too broad?
+- Did the Education section remain fixed?
+- Did bullet count and structure stay the same?
+- Is the final output concise enough for a one-page resume?
 
 OUTPUT RULES:
 - Return the full final LaTeX resume inside a single ```latex code block.
@@ -554,12 +585,12 @@ OUTPUT RULES:
   % Match Assessment: [score]/10 - [brief fit summary]
 - Do not include commentary outside the code block.
 - Keep LaTeX valid.
-- Do not invent facts.
+- Preserve special characters and escaping.
 
-BASE RESUME:
+SELECTED BASE RESUME:
 {resume_text}
 
-JOB DESCRIPTION:
+FULL JOB DESCRIPTION:
 {jd_text}
 """
 
@@ -633,8 +664,31 @@ st.markdown("---")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Base Resume (LaTeX)")
-    resume_text = st.text_area("Edit your base code if needed:", value=base_resume, height=500)
+    try:
+        selected_base_resume = load_resume_template(resume_profile)
+        st.subheader(f"Base Resume: {resume_profile}")
+        st.caption(f"Loaded from: {RESUME_FILES[resume_profile]}")
+
+        show_resume_editor = st.checkbox(
+            "Show/edit base resume LaTeX",
+            value=False,
+            help="Leave unchecked for a lighter, faster interface."
+        )
+
+        if show_resume_editor:
+            resume_text = st.text_area(
+                "Edit your selected base resume if needed:",
+                value=selected_base_resume,
+                height=500,
+                key=f"resume_text_{resume_profile}"
+            )
+        else:
+            resume_text = selected_base_resume
+            st.info("Base resume loaded. Editor hidden for faster use.")
+
+    except Exception as e:
+        st.error(f"Resume loading failed: {e}")
+        st.stop()
 
 with col2:
     st.subheader("Target Job Description")
@@ -657,20 +711,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
             with st.spinner("Analyzing the JD and building a lean tailoring plan..."):
                 jd_info = get_jd_intelligence(jd_text)
                 header_location = infer_header_location(jd_info.get("location", ""))
-                degree_title = infer_degree_title(jd_info.get("role_domain", ""), jd_text)
-
-            st.subheader("📋 JD Intelligence")
-            st.json({
-                "role_title": jd_info.get("role_title", ""),
-                "company": jd_info.get("company", ""),
-                "location": jd_info.get("location", ""),
-                "role_domain": jd_info.get("role_domain", ""),
-                "top_keywords": jd_info.get("top_keywords", []),
-                "top_responsibilities": jd_info.get("top_responsibilities", []),
-                "tools": jd_info.get("tools", []),
-                "header_location_selected": header_location,
-                "degree_title_selected": degree_title,
-            })
+                degree_title = r"Master of Science in Analytics"
 
             with st.spinner("Tailoring the resume..."):
                 if strategy_mode == "Daily Driver (GPT-4o-mini)":
@@ -680,6 +721,7 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                         jd_info=jd_info,
                         header_location=header_location,
                         degree_title=degree_title,
+                        resume_profile=resume_profile,
                     )
                 else:
                     prompt = build_dream_job_prompt(
@@ -688,18 +730,39 @@ if st.button("🔥 Analyze & Tailor for this Role"):
                         jd_info=jd_info,
                         header_location=header_location,
                         degree_title=degree_title,
+                        resume_profile=resume_profile,
                     )
 
                 tailored_text = run_tailoring_model(prompt, strategy_mode)
 
                 tailored_text = apply_deterministic_resume_overrides(
-                tailored_text=tailored_text,
-                header_location=header_location,
-                degree_title=degree_title
+                    tailored_text=tailored_text,
+                    header_location=header_location,
+                    degree_title=degree_title,
                 )
             st.subheader("🚀 Tailored LaTeX Resume")
             st.code(tailored_text, language='latex')
             st.success("Tailoring complete. Copy the LaTeX into Overleaf.")
+
+            st.subheader("📋 JD Intelligence")
+            st.json({
+                "selected_base_resume": resume_profile,
+                "role_title": jd_info.get("role_title", ""),
+                "company": jd_info.get("company", ""),
+                "location": jd_info.get("location", ""),
+                "experience_years": jd_info.get("experience_years", ""),
+                "role_domain": jd_info.get("role_domain", ""),
+                "seniority": jd_info.get("seniority", ""),
+                "tools": jd_info.get("tools", []),
+                "top_keywords": jd_info.get("top_keywords", []),
+                "top_responsibilities": jd_info.get("top_responsibilities", []),
+                "top_business_skills": jd_info.get("top_business_skills", []),
+                "tailoring_focus": jd_info.get("tailoring_focus", []),
+                "possible_skill_substitutions": jd_info.get("possible_skill_substitutions", []),
+                "low_priority_or_risky_keywords": jd_info.get("low_priority_or_risky_keywords", []),
+                "header_location_selected": header_location,
+                "degree_title_fixed": degree_title,
+            })
 
             match_score = ""
             score_match = re.search(r"Match Assessment:\s*([0-9.]+/10)", tailored_text)

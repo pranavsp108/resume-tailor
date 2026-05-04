@@ -1,0 +1,178 @@
+%% Pranav Padmannavar — Data Analyst Resume LaTeX Source
+%% Font: Computer Modern (LaTeX default), sizes scaled down slightly
+
+\documentclass[10pt,letterpaper]{article}
+
+% ---------- Packages ----------
+\usepackage[
+  top=0.4in, bottom=0.4in,
+  left=0.6in, right=0.6in
+]{geometry}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{array}
+\usepackage{tabularx}
+
+% Suppress parskip — we control all spacing manually
+\setlength{\parskip}{0pt}
+\setlength{\parindent}{0pt}
+
+% ---------- Hyperlink styling ----------
+\hypersetup{
+  colorlinks=true,
+  urlcolor=black,
+  linkcolor=black
+}
+
+% ---------- No page numbers ----------
+\pagestyle{empty}
+
+% ---------- Section formatting ----------
+\titleformat{\section}
+  {\normalfont\normalsize\bfseries}
+  {}{0em}{}
+  [\vspace{-9pt}\rule{\linewidth}{0.4pt}]
+\titlespacing{\section}{0pt}{4pt}{0pt}
+
+% ---------- List settings ----------
+\setlist[itemize]{
+  leftmargin=1.2em,
+  topsep=1pt,
+  itemsep=0pt,
+  parsep=0pt,
+  partopsep=0pt,
+  label=\textbullet
+}
+
+% ---------- Custom commands ----------
+\newcommand{\roleonly}[2]{%
+  \noindent
+  \begin{tabularx}{\linewidth}{@{}X r@{}}
+    \textit{#1} & \textit{#2}
+  \end{tabularx}\vspace{0pt}%
+}
+
+\newcommand{\projectheader}[2]{%
+  \noindent
+  \begin{tabularx}{\linewidth}{@{}X r@{}}
+    \textbf{#1} & \textit{#2}
+  \end{tabularx}\vspace{0pt}%
+}
+
+% Separator between entries
+\newcommand{\entrysep}{\vspace{2pt}}
+
+% ======================================================
+\begin{document}
+% ======================================================
+
+% ---------- Header ----------
+\begin{center}
+  {\large\textbf{Pranav Padmannavar}} \\[2pt]
+  \small
+    Minneapolis, MN \ $|$ \ (763)-900-3044 \ $|$ \ 
+    \href{mailto:pranavsp108@gmail.com}{pranavsp108@gmail.com} \ $|$ \ 
+    \href{https://www.linkedin.com/in/pranavsp108/}{LinkedIn} \ $|$ \ 
+    \href{https://github.com/pranavsp108}{GitHub} \ $|$ \ 
+    \href{https://pranavsp108.github.io/}{Portfolio}
+\end{center}
+
+% ---------- Education ----------
+\section{EDUCATION}
+\noindent
+\begin{tabularx}{\linewidth}{@{}X r@{}}
+  \textbf{University of Minnesota Twin Cities} & \textit{Sep 2024 -- May 2026 } \\[-1pt]
+  Master of Science in Analytics \;|\; Minor in Business Management & 3.7 / 4.0
+\end{tabularx}
+\vspace{1pt}
+\noindent
+\begin{tabularx}{\linewidth}{@{}X r@{}}
+  \textbf{Visvesvaraya Technological University} & \textit{Sep 2017 -- May 2021 } \\[-1pt]
+  Bachelor of Engineering in Mechanical Engineering & 3.4 / 4.0
+\end{tabularx}
+
+% ---------- Work Experience ----------
+\section{WORK EXPERIENCE}
+
+% --- Daikin ---
+\noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
+{\fontsize{11pt}{13pt}\selectfont \textbf{Daikin Applied Americas} } & \textit{Minneapolis, U.S.}
+\end{tabularx}\vspace{-2pt}
+\roleonly{Data Analytics and Optimization Intern}{Aug 2025 -- Dec 2025 }
+\begin{itemize}
+  \item Analyzed \textbf{2,000+ HVAC design and cost parameters} using \textbf{Python} to identify material configuration opportunities, supporting \textbf{\$1.5M+ in annual cost savings}.
+  \item Built automated scenario analysis workflows to compare cost, performance, and pricing tradeoffs, accelerating design evaluation and reducing simulation review time by \textbf{90\%}.
+  \item Created structured validation outputs for engineering stakeholders, saving \textbf{1,000+ engineering hours} annually and shortening the \textbf{R\&D feedback loop}.
+\end{itemize}
+
+\entrysep
+
+% --- TCS ---
+\noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
+{\fontsize{11pt}{13pt}\selectfont \textbf{Tata Consultancy Services} $|$ \textit{Client: Pandora}} & \textit{Bangalore, India} 
+\end{tabularx}\vspace{-2pt}
+\roleonly{Data Analyst, Retail Analytics}{Feb 2022 -- Jul 2024 }
+\begin{itemize}
+  \item Automated \textbf{30+ weekly KPI reports} using \textbf{Python, SQL, and Power BI} for global retail operations (\$4.5B revenue), eliminating \textbf{1,000+ hours} of manual effort.
+  \item Built scalable data processing workflows using \textbf{Azure Logic Apps, Functions, and SQL}, reducing reporting workloads by \textbf{35\%} and operational latency by \textbf{20\%}.
+  \item Analyzed multi-terabyte retail datasets using advanced \textbf{SQL} to identify sales trends, optimize KPI logic, and reduce executive dashboard response times by \textbf{40\%}.
+  \item Implemented automated \textbf{data quality} and \textbf{anomaly detection} checks across sales pipelines, improving reporting accuracy by \textbf{15\%} and mitigating \textbf{\$50K+} in revenue leakage.
+  \item Designed stakeholder-facing \textbf{Power BI} dashboards for 50+ users, translating sales and operations data into insights that uncovered a \textbf{12\% growth opportunity}.
+\end{itemize}
+\entrysep
+
+% --- UMN Teaching Assistant ---
+\noindent \begin{tabularx}{\linewidth}{@{} X r@{} }
+{\fontsize{11pt}{13pt}\selectfont \textbf{University of Minnesota}} & \textit{Minneapolis, U.S.} 
+\end{tabularx}\vspace{-2pt}
+\roleonly{Graduate Teaching Assistant}{Jan 2025 -- May 2026 }
+\begin{itemize}
+  \item Supported \textbf{Data Science and AI Hub} coursework by guiding 230+ students and 20+ teams through \textbf{EDA}, \textbf{statistical analysis}, and dashboard-driven projects.
+  \item Co-designed assessments and provided technical consultation on \textbf{Python, R, SQL}, and responsible analytics, achieving a \textbf{100\% project completion rate}.
+\end{itemize}
+
+% ---------- Skills ----------
+\section{SKILLS}
+\small
+\noindent
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}p{0.90in}X@{}}
+  Analytics: & SQL, Python, Excel, KPI Analysis, Funnel Analysis, Cohort Analysis, Customer Segmentation, Revenue Analysis \\[1pt]
+  BI/Viz: & Tableau, Power BI, Dashboard Design, Executive Reporting, Data Storytelling, Self-Service Analytics \\[1pt]
+  Data Prep: & Pandas, NumPy, Data Cleaning, Data Quality Checks, ETL Workflows, Feature Engineering \\[1pt]
+  Stats: & A/B Testing, Hypothesis Testing, Regression Analysis, Forecasting, Anomaly Detection \\[1pt]
+  Platforms: & BigQuery, PostgreSQL, MySQL, Azure, PySpark, Git \\
+\end{tabularx}
+\normalsize
+
+% ---------- Project Experience ----------
+\section{PROJECT EXPERIENCE}
+
+% --- E-Commerce Product Analytics ---
+\projectheader{\href{\detokenize{https://github.com/pranavsp108/ecommerce-product-analytics}}{{\fontsize{11pt}{13pt}\selectfont E-Commerce Product Analytics \& Experimentation Dashboard}}}{Apr 2026 -- May 2026}
+\begin{itemize}
+  \item Built a \textbf{BigQuery SQL} analytics layer and \textbf{Tableau} dashboard on GA4-style e-commerce data, tracking \textbf{15+ KPIs} across conversion, cart abandonment, AOV, revenue per user, retention, and category performance.
+  \item Identified \textbf{28\% checkout drop-off}, \textbf{4 high-intent customer segments}, and an estimated \textbf{\$42K monthly revenue opportunity} through funnel, cohort, segmentation, and A/B testing analysis.
+\end{itemize}
+
+\entrysep
+
+% --- Retail Basket Analysis ---
+\projectheader{\href{\detokenize{https://github.com/pranavsp108/instacart-reorder-recommendation}}{{\fontsize{11pt}{13pt}\selectfont Retail Basket Analysis \& Customer Segmentation}}}{Jun 2025 -- Aug 2025}
+\begin{itemize}
+  \item Analyzed \textbf{30M+ Instacart order records} using \textbf{SQL, Python, and PySpark} to profile reorder behavior, product affinity, department trends, and customer purchase frequency.
+  \item Created \textbf{5 customer segments} and \textbf{12 cross-sell product bundles} using market basket analysis, uncovering an estimated \textbf{18\% lift opportunity} in repeat purchase and merchandising strategy.
+\end{itemize}
+
+\entrysep
+
+% --- Sales and Pricing Dashboard ---
+\projectheader{{\fontsize{11pt}{13pt}\selectfont Sales \& Pricing Performance Dashboard}}{Mar 2025 -- Apr 2025}
+\begin{itemize}
+  \item Built an interactive \textbf{Tableau} dashboard using \textbf{SQL} and \textbf{Python} to analyze \textbf{10+ sales KPIs} across product mix, pricing bands, regions, revenue drivers, and business segments.
+  \item Identified \textbf{6 underperforming categories}, \textbf{9 pricing inconsistencies}, and an estimated \textbf{7\% margin improvement opportunity} through KPI analysis, segmentation, and executive-ready storytelling.
+\end{itemize}
+
+% ======================================================
+\end{document}
