@@ -345,9 +345,9 @@ SELECTED RESUME IDENTITY: DATA SCIENTIST
 
 Keep the resume focused on:
 - Python, SQL, predictive modeling, statistical analysis, experimentation, optimization, forecasting, recommendation systems, and business impact.
-- Good DS tailoring can emphasize: Scikit-learn, LightGBM, XGBoost, TensorFlow, feature engineering, model evaluation, A/B testing, causal inference, BigQuery, PySpark, Databricks, AWS, Azure, Tableau, Power BI.
+- Good DS tailoring can emphasize: Scikit-learn, LightGBM, XGBoost, TensorFlow, feature engineering, model evaluation, A/B testing, LSTM, ARIMA, Prophet, causal inference, BigQuery, PySpark, Databricks, AWS, Azure, Tableau, Power BI.
 - Do NOT drift into a broad ML Engineer, Data Engineer, MLOps Engineer, or GenAI Engineer resume.
-- Avoid adding unsupported infrastructure-heavy tools such as Kubernetes, Airflow, Kafka, MLflow, Docker, SageMaker, Vertex AI, Hugging Face, or PyTorch unless already present in the selected base resume or clearly required by the JD and strongly supported by a project.
+- Avoid adding unsupported infrastructure-heavy tools such as Kubernetes, Airflow, Kafka, MLflow, Docker, SageMaker, Vertex AI, Hugging Face, or PyTorch unless clearly required by the JD and can be strongly supported by a project.
 """
     else:
         profile_guidance = """
@@ -356,8 +356,8 @@ SELECTED RESUME IDENTITY: DATA ANALYST
 Keep the resume focused on:
 - SQL, Python, dashboards, KPI reporting, data quality, funnel/cohort analysis, customer segmentation, A/B testing, business insights, and stakeholder decision support.
 - Good DA tailoring can emphasize: Excel, Tableau, Power BI, BigQuery, PostgreSQL, MySQL, Azure, PySpark, ETL workflows, executive reporting, dashboard design, revenue analysis, product analytics, and data storytelling.
-- Do NOT make this resume ML-heavy or turn it into a Data Scientist, Data Engineer, MLOps, or GenAI resume.
-- Avoid adding unsupported ML/cloud tools such as TensorFlow, PyTorch, Hugging Face, Kubernetes, MLflow, SageMaker, Vertex AI, or deep learning unless already present in the selected base resume.
+- Do NOT make this resume ML-heavy or turn it into a Data Engineer, MLOps, or GenAI resume.
+- Avoid adding unsupported ML/cloud tools such as TensorFlow, PyTorch, Hugging Face, Kubernetes, MLflow, SageMaker, Vertex AI, or deep learning unless clearly required by the JD and can be strongly supported by a project.
 """
 
     return rf"""
